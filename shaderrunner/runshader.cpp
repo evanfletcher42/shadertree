@@ -13,13 +13,23 @@
 #include <math.h>
 #include <time.h>
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#define GL_GLEXT_PROTOTYPES 1
+#include <GL/osmesa.h>
+#include <GL/glext.h>
 
 #include "treeinterface.h"
 
 volatile sig_atomic_t stop = 0;
 int serialPort;
+
+double getTimeSeconds()
+{
+    using clock = std::chrono::steady_clock;
+    static const auto t0 = clock::now();
+    auto now = clock::now();
+    std::chrono::duration<double> d = now - t0;
+    return d.count();
+}
 
 void handle_sigterm_sigint(int signum)
 {
@@ -243,40 +253,47 @@ int main(int argc, char* argv[])
         vertexShaderCode = oss.str();
     }
 
-    // Initialize GLFW
-    if (!glfwInit())
+    // ----- Create headless OpenGL context via OSMesa -----
+    int ctx_attribs[] = {
+        OSMESA_PROFILE,          
+        OSMESA_CORE_PROFILE,
+        OSMESA_CONTEXT_MAJOR_VERSION, 3,
+        OSMESA_CONTEXT_MINOR_VERSION, 3,
+        0
+    };
+
+    OSMesaContext ctx = OSMesaCreateContextAttribs(ctx_attribs, NULL);
+    if (!ctx)
     {
-        fprintf(stderr, "Failed to initialize GLFW\n");
+        fprintf(stderr, "OSMesaCreateContextAttribs failed\n");
         return -1;
     }
 
-    // Create a hidden window
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    GLFWwindow *window = glfwCreateWindow(640, 480, "Hidden Window", NULL, NULL);
-    if (!window)
+    // We never actually rasterize (we always enable GL_RASTERIZER_DISCARD),
+    // but OSMesa requires a buffer to attach. 1×1 RGBA is enough.
+    int width = 1, height = 1;
+    void *osmesaBuffer = malloc(width * height * 4); // 4 bytes per pixel (RGBA8)
+    if (!osmesaBuffer)
     {
-        fprintf(stderr, "Failed to create GLFW window\n");
-        glfwTerminate();
+        fprintf(stderr, "Failed to allocate OSMesa buffer\n");
+        OSMesaDestroyContext(ctx);
         return -1;
     }
 
-    glfwMakeContextCurrent(window);
-
-    // Initialize GLEW
-    glewExperimental = GL_TRUE; // Needed for core profile
-    GLenum err = glewInit();
-    if (GLEW_OK != err)
+    if (!OSMesaMakeCurrent(ctx, osmesaBuffer, GL_UNSIGNED_BYTE, width, height))
     {
-        fprintf(stderr, "Failed to initialize GLEW: %s\n", glewGetErrorString(err));
-        glfwTerminate();
+        fprintf(stderr, "OSMesaMakeCurrent failed\n");
+        free(osmesaBuffer);
+        OSMesaDestroyContext(ctx);
         return -1;
     }
+    // ----- End OSMesa init -----
 
     // Compile the user-supplied vertex shader
     GLuint vertexShader = compileShader(vertexShaderCode, GL_VERTEX_SHADER);
     if (vertexShader == 0)
     {
-        glfwTerminate();
+        OSMesaDestroyContext(ctx);
         return 1;
     }
 
@@ -285,7 +302,7 @@ int main(int argc, char* argv[])
     GLuint fragmentShader = compileShader(fragmentShaderSource, GL_FRAGMENT_SHADER);
     if (fragmentShader == 0)
     {
-        glfwTerminate();
+        OSMesaDestroyContext(ctx);
         return 2;
     }
 
@@ -293,7 +310,7 @@ int main(int argc, char* argv[])
     GLuint shaderProgram = linkProgram(vertexShader, fragmentShader);
     if (shaderProgram == 0)
     {
-        glfwTerminate();
+        OSMesaDestroyContext(ctx);
         return 3;
     }
 
@@ -363,7 +380,7 @@ int main(int argc, char* argv[])
     }
 
     // Start main loop
-    float startTime = static_cast<float>(glfwGetTime());
+    float startTime = static_cast<float>(getTimeSeconds());
 
     float *pfColors = new float[numLEDs * 3];
 
@@ -371,7 +388,7 @@ int main(int argc, char* argv[])
 
     while (!stop)
     {
-        float currentTime = static_cast<float>(glfwGetTime()) - startTime;
+        float currentTime = static_cast<float>(getTimeSeconds()) - startTime;
 
         // Use the shader program
         glUseProgram(shaderProgram);
@@ -398,7 +415,7 @@ int main(int argc, char* argv[])
         glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, feedbackBuffer);
         glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, numLEDs * 3 * sizeof(float), pfColors);
 
-        // float dt = static_cast<float>(glfwGetTime()) - startTime - currentTime;
+        // float dt = static_cast<float>(getTimeSeconds()) - startTime - currentTime;
         // printf("dt: %f\n", dt);
 
         if( !bFirstWrite )
@@ -439,8 +456,8 @@ int main(int argc, char* argv[])
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    OSMesaDestroyContext(ctx);
+    free(osmesaBuffer);
 
     printf("Goodbye\n");
 

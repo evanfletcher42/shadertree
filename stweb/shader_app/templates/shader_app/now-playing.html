@@ -1,0 +1,101 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" href="{% static 'shader_app/styles.css' %}">
+    <link rel="shortcut icon" type="image/png" href="{% static 'shader_app/favicon.ico' %}" >
+    <style>
+        /* Custom layout based on provided styles */
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+            width: 100%;
+        }
+
+        .section {
+            width: 100%;
+        }
+
+        .top-section h2 {
+            font-size: 6em;
+            font-weight: normal;
+            color: #606060; 
+            margin-top: 0.25em;
+            margin-bottom: -1em;
+        }
+
+        .title-section h1 {
+            font-size: 8em;
+            font-weight: bold;
+            margin-bottom: -0.25em;
+        }
+
+        .author-section {
+            font-size: 4em;
+            margin-bottom: -1em;
+        }
+
+        .bottom-section p {
+            font-size: 4em;
+            margin-bottom: em;
+        }
+
+        .bottom-section a {
+            font-size: 4em;
+            font-weight: bold;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Top Section -->
+        <div class="section top-section">
+            <h2>Now Playing</h2>
+        </div>
+
+        <!-- Title Section -->
+        <div class="section title-section">
+            <h1 id="title">Default Title</h1>
+            <p class="author-section" id="author">By Default Author</p>
+        </div>
+
+        <!-- Bottom Section -->
+        <div class="section bottom-section">
+            <p>Run Your Own Shader On This Tree:</p>
+            <a href="#">shadertree.valve.org</a>
+        </div>
+    </div>
+</body>
+
+<script>
+    async function updateNowPlaying() {
+        try {
+            const response = await fetch('/api/now_playing');
+            if (!response.ok) {
+                throw new Error(`Response status: (${response.status})`);
+            }
+            const data = await response.json();
+
+            // Update the DOM elements with fetched data
+            document.getElementById('title').textContent = data.now_playing || 'Title Unavailable';
+            document.getElementById('author').textContent = `By ${data.author || 'Author Unavailable'}`;
+        } catch (error) {
+            console.error('Failed to fetch now playing information:', error);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateNowPlaying();
+        setInterval(updateNowPlaying, 5000);
+    });
+
+</script>
+
+</html>

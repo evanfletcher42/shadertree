@@ -1,0 +1,97 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ shadertitle|default:"New" }}</title>
+  <link rel="shortcut icon" type="image/png" href="{% static 'shader_app/favicon.ico' %}" >
+  <link rel="stylesheet" href="{% static 'shader_app/styles.css' %}">
+  <!-- Include Ace Editor -->
+  <script src="{% static 'shader_app/ace.js' %}"></script>
+  <!-- Include glMatrix Library -->
+  <script src="{% static 'shader_app/gl-matrix-min.js' %}"></script>
+  <script>
+    window.positions = {{ ledcoords|safe }};
+    console.log('Positions loaded:', window.positions);
+  </script>
+
+</head>
+<body>
+    <div id="header">
+
+        <div id="headerBlock1">
+            <a href="/" id="headerTitle">Shadertree</a>
+        </div>
+    
+        <div id="headerBlock2">
+            <span style="padding-top:14px;padding-bottom:14px;">
+                <a class="headerLinks" href="/edit/new">New</a>
+                <a class="headerLinks" href="/about">About</a>
+            </span>
+        </div>
+
+    </div>
+
+    <div id="content">
+        <div class="container">
+            <div class="block0">
+                <div id="player">
+                    <canvas id="glCanvas" class="playerCanvas"></canvas>
+                </div>
+                <div id="shaderInfo">
+                    <div>
+                        <input type="text" class="inputForm" id="shaderTitle" required="" name="name1" value="{{ shadertitle }}" maxlength="32" placeholder=" Name of your shader">
+                    </div>
+                    <div>
+                        By: <input type="text" class="inputForm" id="shaderAuthor" required="" name="name1" value="{{ shaderauthor }}" maxlength="32" placeholder=" Your name">
+                    </div>
+                    <div>
+                        <input type="checkbox" name="isPlayable" id="is_playable" {% if shaderplayable %}checked{% endif %}>
+                        <label for="is_playable">Run this shader on the physical tree</label>
+                    </div>
+                    <div class="button-container">
+                        <div style="display: flex; align-items: flex-end;">
+                            <button id="saveButton">Save</button>
+                            <span id="saveStatus" style="margin-left: 10px; font-weight: bold;"></span>
+                        </div>
+                        {% if shaderident %}<button id="deleteButton">Delete</button>{% endif %}
+                    </div>
+                    <div>
+                        <h2>Tips:</h2>
+                        <p><span style="font-weight: bold;">Perf and VSync:</span> There is no vsync or display rate to miss - LEDs update when your shader is done, up to about 60Hz.</p>
+                        <p><span style="font-weight: bold;">LED 3D Coordinates:</span> Use iPos for volumetric-sampled effects. In the tree's coordinate system: +y up; (0,-1,0) is near the bottom center of the tree; (0,1,0) is near the top of the tree.</p>
+                        <p><span style="font-weight: bold;">LED Index:</span> The zero-indexed position of each LED in the string is also available (iIdx). Use this if you want to light up a specific LED. </p>
+                        <p><span style="font-weight: bold;">The Tree is Real:</span> Regrettably, the predefined vertex shader outputs gl_Position, gl_PointSize, and gl_ClipDistance do not work IRL, and will not affect the real tree. Sorry!</p>
+                    </div>
+                    
+                </div>
+            </div>
+            <div class="block1">
+                <div id="editorHeader" class="expanded">
+                    <div id="editorHeaderBar">Shader prefix / inputs &amp; outputs:</div>
+                    <div id="editorHeaderText">
+                        <pre>
+#version 300 es
+<span style="color:#930F80">in vec3</span> iPos;  <span style="color:#236E24">  // Input: LED 3D coordinate (+Y up; bottom center @ 0,-1,0; tip @ 0,1,0)</span>
+<span style="color:#930F80">in uint</span> iIdx;  <span style="color:#236E24">  // Index of LED in string, 0-499</span>
+<span style="color:#930F80">in float</span> iTime;  <span style="color:#236E24">// Input: Shader playback time (in seconds)</span>
+
+<span style="color:#930F80">out vec3</span> outColor;  <span style="color:#236E24">  // Output: RGB color</span>
+                        </pre>
+                    </div>
+                </div>
+                <div id="editor"></div>
+                <div id="errorLog" class="error"></div>
+            </div>
+        </div>
+    </div>
+  
+  <script src="{% static 'shader_app/app.js' %}" 
+    defer
+    data-shaderident="{{ shaderident }}"
+    data-shaderprefix="{{ shaderprefix }}"
+    data-editortext="{{ editortext }}"
+    data-csrftoken="{{ csrf_token }}"
+    ></script>
+</body>
+</html>

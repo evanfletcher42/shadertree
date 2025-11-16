@@ -1,0 +1,63 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shadertree</title>
+  <link rel="shortcut icon" type="image/png" href="{% static 'shader_app/favicon.ico' %}" >
+  <link rel="stylesheet" href="{% static 'shader_app/styles.css' %}">
+</head>
+<body>
+    <div id="header">
+
+        <div id="headerBlock1">
+            <a href="/" id="headerTitle">Shadertree</a>
+        </div>
+    
+        <div id="headerBlock2">
+            <span style="padding-top:14px;padding-bottom:14px;">
+                <a class="headerLinks" href="/edit/new">New</a>
+                <a class="headerLinks" href="/about">About</a>
+            </span>
+        </div>
+
+    </div>
+
+    <div id="content">
+        <div class="container">
+            <div class="bigText">Write Shaders for a Physical LED Tree</div>
+            <div class="block0">
+                <div style="font-size: 2.0em">All Shaders</div>
+                <div class="divShadersTable">
+                    <table cellspacing="0" cellpadding="0" style="background-color: rgb(0, 0, 0); visibility: visible; width: 100%" id="shadersTable">
+                        <thead>
+                            <tr style="background-color:#808080;font-weight:bold">
+                                <td class="tableHeadCell">Name</td>
+                                <td class="tableHeadCell">By</td>
+                                <td class="tableHeadCell">Run on Tree</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                                <tr class="tableRow">
+                                    <td class="tableCell"><a class="newButton" href="/edit/new">+ New Shader</a></td>
+                                    <td class="tableCell"></td>
+                                    <td class="tableCell"></td>
+                                </tr>
+                            {% for s in shaders %}
+                                <tr class="tableRow">
+                                    <td class="tableCell"> <a href="/edit/{{ s.ident }}/">{{ s.title }}</a> </td>
+                                    <td class="tableCell"> {{ s.author }} </td>
+                                    <td class="tableCell"> {% if s.is_playable %}✅{% else %}❌{% endif %} </td>
+                                </tr>    
+                            {% endfor %}
+                    </table>
+                    <p>The tree runs a randomly-selected shader every 5 minutes.</p>
+                    <p>To add your shader to the bag, check "Run this shader on the physical tree" in the editor.</p>
+                </div>
+            </div>
+            <div class="block1">
+            </div>
+        </div>
+    </div>
+</body>
+</html>

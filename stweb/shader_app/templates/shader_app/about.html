@@ -1,0 +1,45 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shadertree</title>
+  <link rel="shortcut icon" type="image/png" href="{% static 'shader_app/favicon.ico' %}" >
+  <link rel="stylesheet" href="{% static 'shader_app/styles.css' %}">
+</head>
+<body>
+    <div id="header">
+
+        <div id="headerBlock1">
+            <a href="/" id="headerTitle">Shadertree</a>
+        </div>
+    
+        <div id="headerBlock2">
+            <span style="padding-top:14px;padding-bottom:14px;">
+                <a class="headerLinks" href="/edit/new">New</a>
+                <a class="headerLinks" href="/about">About</a>
+            </span>
+        </div>
+
+    </div>
+
+    <div id="content">
+            <h2>About Shadertree</h2>
+            <p>Shadertree is a project by Evan Fletcher.</p>
+            <p>This server controls a 3D-scanned LED tree, set up near the kitchenette on 13F. The 3D positions of each LED are taken as inputs to vertex shaders written on this site, which animate the LEDs on the tree.</p>
+            <p>Anyone can contribute a shader! Just click the "new" button at the top of the page. Anything that works in the editor should also work on the tree.</p>
+            
+            <h2>How does it work?</h2>
+            <p>The tree itself is a string of 500 addressible LEDs (WS2811), a Teensy LC (ARM Cortex M0+ uc), and a Steam Deck, which controls the LEDs and also hosts this site.</p>
+            <p>During setup, the LEDs are programmed to blink out unique error correcting-codes, used to identify each LED in a video of the tree. 
+                The tree is "scanned" by walking around it with a camera, using a reconstruction method vaguely similar to Bundler (Snavely et al, 2006). 
+                The result is a tree where every LED's 3D coordinates are known.            
+            <p>These points are used as inputs for vertex shaders running on the Steam Deck. We use transform feedback to pull out LED colors every frame, then send these over USB to the micocontroller driving the LEDs. 
+            <p>In this website's editor, your shader is compiled and displayed with WebGL, but is otherwise run exactly as it will be on the real tree.</p>
+
+            <h2>Why does this look like Shadertoy?</h2>
+            <p>The best high-effort projects are parodies of other high-effort projects. Also CSS is easy when you can copy it wholesale.</p>
+
+    </div>
+</body>
+</html>

@@ -379,8 +379,15 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Warning: 'iTime' uniform not found in shader.\n");
     }
 
+    GLint frameUniformLocation = glGetUniformLocation(shaderProgram, "iFrame");
+    if (frameUniformLocation == -1)
+    {
+        fprintf(stderr, "Warning: 'iFrame' uniform not found in shader.\n");
+    }
+
     // Start main loop
     float startTime = static_cast<float>(getTimeSeconds());
+    int nFrameCounter = 0;
 
     float *pfColors = new float[numLEDs * 3];
 
@@ -397,6 +404,12 @@ int main(int argc, char* argv[])
         if (timeUniformLocation != -1)
         {
             glUniform1f(timeUniformLocation, currentTime);
+        }
+
+        // Update frame uniform
+        if (frameUniformLocation != -1)
+        {
+            glUniform1i(frameUniformLocation, nFrameCounter);
         }
 
         // Disable rasterization since we're not rendering
@@ -434,6 +447,8 @@ int main(int argc, char* argv[])
         {
             fprintf(stderr, "OpenGL error: %d\n", error);
         }
+
+        nFrameCounter++;
     }
 
     // turn off the tree

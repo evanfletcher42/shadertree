@@ -200,7 +200,7 @@ void main() {
     float f = uProjectionMatrix[0][0];
 
     gl_Position = uProjectionMatrix * viewPos;
-    gl_PointSize = 20.0f * f / zd;
+    gl_PointSize = 10.0f * f / zd;
     vColor = aColor;
 }
 `;

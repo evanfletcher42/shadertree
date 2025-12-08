@@ -295,6 +295,11 @@ function captureColors(tfProgram) {
         gl.uniform1f(iTimeLocation, (performance.now() - startTime) / 1000.0);
     }
 
+    const frameIdxLocation = gl.getUniformLocation(tfProgram, 'iFrame');
+    if (frameIdxLocation != null) {
+        gl.uniform1i(frameIdxLocation, frameIdx);
+    }
+
     // Disable rasterization
     gl.enable(gl.RASTERIZER_DISCARD);
 
@@ -319,6 +324,8 @@ function captureColors(tfProgram) {
 
     // Clean up the temporary VAO
     gl.deleteVertexArray(tfCaptureVAO);
+
+    frameIdx++;
 }
 
 // ------------------------
@@ -327,6 +334,7 @@ function captureColors(tfProgram) {
 
 let tfProgram; // Transform Feedback Program
 let startTime = performance.now();
+let frameIdx = 0;
 
 let bUserShaderCompiles = false;
 

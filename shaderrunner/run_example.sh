@@ -1,3 +1,3 @@
 #!/bin/bash
 
-cat testshader.glsl | ./runshader /dev/ttyACM1
+cat testshader.glsl | ./runshader

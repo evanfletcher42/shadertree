@@ -11,5 +11,5 @@ void main() {
         sin(iPos.z + iTime*4.0f)
     );
     
-    outColor = 0.5f + 0.5f*outColor;
+    outColor = (0.5f + 0.5f*outColor) * 0.2f;
 }

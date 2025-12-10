@@ -29,7 +29,7 @@ def runshader_with_timeout(shader_text, timeout_seconds=300):
     }
 
 
-    p = subprocess.Popen( ["./runshader", "/dev/ttyACM1"],
+    p = subprocess.Popen( ["./runshader"],
                          stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)

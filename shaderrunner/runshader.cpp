@@ -12,15 +12,29 @@
 #include <fcntl.h>
 #include <math.h>
 #include <time.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #define GL_GLEXT_PROTOTYPES 1
 #include <GL/osmesa.h>
 #include <GL/glext.h>
 
-#include "treeinterface.h"
+#define NR_LEDS_PER_STRAND	 (215)
+#define block_size			 512
+#define STRANDS				32
+#define USB_TIMEOUT 1024
+#define TRANSFERS 8
+#define DEVICES 2
+const char * serials[DEVICES] = { "f38dabcd5b6ebc14", "d3f9abcd3bdabc14" };
+
+#include "x32breakoutdriver.h"
 
 volatile sig_atomic_t stop = 0;
-int serialPort;
+volatile sig_atomic_t stopLED = 0;
+
+og_sema_t semaReadyForLEDs;
+og_sema_t semaDoneLEDs;
 
 double getTimeSeconds()
 {
@@ -135,96 +149,62 @@ float *getLEDPositions(int &numLEDs)
     return positions;
 }
 
-int setupSerial( const char* serialPath )
+void USBThread()
 {
-    serialPort = open( serialPath, O_RDWR | O_NOCTTY | O_SYNC );
-    if( serialPort < 0 )
+    printf("SetupBreakoutDriver\n");
+    SetupBreakoutDriver();
+
+    while( !stopLED )
     {
-        fprintf(stderr, "Error opening serial port: %d (%s)\n", errno, strerror(errno));
-        return -1;
+        // printf("TickBreakoutDriver\n");
+        TickBreakoutDriver();
+        if( done_frame == done_mask)
+        {
+            OGUnlockSema(semaReadyForLEDs);
+            OGLockSema(semaDoneLEDs);
+
+            done_frame = 0;
+        }
     }
 
-    struct termios tty;
-    memset(&tty, 0, sizeof tty);
-    if (tcgetattr(serialPort, &tty) != 0) {
-        fprintf(stderr, "Error in tcgetattr\n");
-        close(serialPort);
-        return 1;
-    }
-
-    cfsetospeed(&tty, B115200);
-    cfsetispeed(&tty, B115200);
-
-    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
-    tty.c_iflag &= ~IGNBRK;                         // disable break processing
-    tty.c_lflag = 0;                                // no signaling chars, no echo
-    tty.c_oflag = 0;                                // no remapping, no delays
-    tty.c_cc[VMIN]  = 1;                            // read blocks until we get 1 byte
-    tty.c_cc[VTIME] = 1;                            // 0.1 seconds read timeout
-
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);         // shut off xon/xoff ctrl
-
-    tty.c_cflag |= (CLOCAL | CREAD);                // ignore modem controls
-    tty.c_cflag &= ~(PARENB | PARODD);              // shut off parity
-    tty.c_cflag &= ~CSTOPB;
-    tty.c_cflag &= ~CRTSCTS;
-
-    if (tcsetattr(serialPort, TCSANOW, &tty) != 0) {
-        fprintf(stderr, "Error in tcsetattr\n");
-        close(serialPort);
-        return -1;
-    }
-
-    tcflush(serialPort, TCIOFLUSH);
-
-    return serialPort;
+    printf("CleanupBreakoutDriver\n");
+    CleanupBreakoutDriver();
+    printf("CleanupBreakoutDriver Done\n");
 }
 
-void writeSerial( float* pfColors, uint8_t *pOutBuf, int numLEDs )
+void WriteUsb(float *pfColors, int numLEDs)
 {
-    pOutBuf[0] = '*';
-    size_t writeSize = (size_t)(1 + 3 * numLEDs);
+    // Wait for USB ready
+    OGLockSema(semaReadyForLEDs);
 
-    for(int i = 0; i < numLEDs * 3; i++)
+    // Copy over LEDs
+    for (int i = 0; i < numLEDs; i++)
     {
-        // gamma correct
-        pfColors[i] = powf(pfColors[i], 1.7f);
+        float flR = pfColors[i * 3 + 0];
+        float flG = pfColors[i * 3 + 1];
+        float flB = pfColors[i * 3 + 2];
 
-        // to 8 bits, round, clamp
-        pfColors[i] *= 255.0f + 0.5f;
-        pfColors[i] = fmax(0.0f, fmin(255.0f, pfColors[i]));
-        pOutBuf[i + 1] = (uint8_t)pfColors[i];
+        // clamp
+        flR = flR > 1.0f ? 1.0f : (flR < 0 ? 0 : flR);
+        flG = flG > 1.0f ? 1.0f : (flG < 0 ? 0 : flG);
+        flB = flB > 1.0f ? 1.0f : (flB < 0 ? 0 : flB);
+
+        // scale
+        int r = (int)(flR * 255.f + 0.5f);
+        int g = (int)(flG * 255.f + 0.5f);
+        int b = (int)(flB * 255.f + 0.5f);
+
+        // address demuxing
+        int nDevice = i / (NR_LEDS_PER_STRAND * STRANDS);
+        int nStrand = (i / NR_LEDS_PER_STRAND) % STRANDS;
+        int nIdx = i % NR_LEDS_PER_STRAND;
+
+        //printf("nDevice %d nStrand %d nIdx %d\n", nDevice, nStrand, nIdx);
+
+        LEDs[nDevice][nIdx][nStrand] = r | (g << 8) | (b << 16);
     }
 
-    size_t n = write(serialPort, pOutBuf, writeSize);
-    if( n != writeSize )
-    {
-        fprintf(stderr, "Serial write error (n=%zu)\n", n);
-    }
-
-    tcdrain(serialPort);
-}
-
-bool waitForReply()
-{
-    static char buf[1];
-    int n = read(serialPort, buf, 1);
-
-    if(n == 0)
-    {
-        // timeout
-        return false;
-    }
-
-    if( n == 1 and buf[0] == 'X')
-    {
-        // ready
-        return true;
-    }
-
-    // error
-    fprintf(stderr, "Error reading from serial port: %d (%s) - returned %d\n", errno, strerror(errno), n);
-    return false;
+    OGUnlockSema(semaDoneLEDs);
 }
 
 int main(int argc, char* argv[])
@@ -233,17 +213,10 @@ int main(int argc, char* argv[])
     signal(SIGTERM, handle_sigterm_sigint);
     signal(SIGINT, handle_sigterm_sigint);
 
-    if( argc != 2 )
-    {
-        printf("Usage: %s <serial_port>\n", argv[0]);
-        return 1;
-    }
+    semaReadyForLEDs = OGCreateSema();
+    semaDoneLEDs = OGCreateSema();
 
-    const char* serialPath = argv[1];
-    if( setupSerial( serialPath ) < 0)
-    {
-        return 1;
-    }
+    std::thread thread(USBThread);
 
     // Read vertex shader code from stdin
     std::string vertexShaderCode;
@@ -428,19 +401,6 @@ int main(int argc, char* argv[])
         glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, feedbackBuffer);
         glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, numLEDs * 3 * sizeof(float), pfColors);
 
-        // float dt = static_cast<float>(getTimeSeconds()) - startTime - currentTime;
-        // printf("dt: %f\n", dt);
-
-        if( !bFirstWrite )
-        {
-            // Wait for ready signal. (Waiting here parallelizes shader eval with firmware busy)
-            waitForReply();
-        }
-        bFirstWrite = false;
-
-        // Send data to the tree
-        writeSerial(pfColors, pOutBuf, numLEDs);
-
         // Handle any OpenGL errors
         GLenum error = glGetError();
         if (error != GL_NO_ERROR)
@@ -448,14 +408,31 @@ int main(int argc, char* argv[])
             fprintf(stderr, "OpenGL error: %d\n", error);
         }
 
+        // GLSL is done - A new frame is ready (in pfColors)
+
+        WriteUsb(pfColors, numLEDs);
+
         nFrameCounter++;
     }
 
+    printf("Quit - Shutdown tree\n");
+
     // turn off the tree
     memset(pfColors, 0, sizeof(float) * 3 * numLEDs);
-    writeSerial(pfColors, pOutBuf, numLEDs);
 
-    close(serialPort);
+    WriteUsb(pfColors, numLEDs);
+    WriteUsb(pfColors, numLEDs);
+    printf("Last write done\n");
+
+    usleep(30000);
+
+    printf("Signal USB thread stop\n");
+    stopLED = 1;
+    OGUnlockSema(semaDoneLEDs);
+
+
+    thread.join();
+    printf("Joined USB thread\n");
 
     delete[] pfColors;
     delete[] pIndices;

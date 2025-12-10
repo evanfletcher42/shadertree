@@ -201,7 +201,7 @@ void WriteUsb(float *pfColors, int numLEDs)
 
         //printf("nDevice %d nStrand %d nIdx %d\n", nDevice, nStrand, nIdx);
 
-        LEDs[nDevice][nIdx][nStrand] = r | (g << 8) | (b << 16);
+        LEDs[nDevice][nIdx][nStrand] = b | (g << 8) | (r << 16);
     }
 
     OGUnlockSema(semaDoneLEDs);

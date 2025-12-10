@@ -62,8 +62,23 @@ void main() {
     // The hSum table above gives us the cumulative sum of the hadamard table, to use as the offset for each nibble.
 
     // Index in full 35-slot sequence
-    int iOuterIdx = (iFrame / 2) % 35;
-    //int iOuterIdx = (iFrame / 32) % 35;  // slower for human debug
+
+    int iFloatFrame = int(iTime * 59.94f);
+    int iOuterIdx = int(iFloatFrame / 2 ) % 35;
+
+    //int iOuterIdx = (iFrame / 4) % 35;
+    //int iOuterIdx = (iFrame / 64) % 35;  // slower for human debug
+
+    // illuminate in subsets
+    //int iSubsetIdx = (int(iIdx) + (iFloatFrame / 2 / 35 ) ) % 10;
+
+    //if( iSubsetIdx > 2)
+   // {
+       // outColor = vec3(0.0f, 0.0f, 0.0f);
+        //return;
+    //}
+
+
 
     if( iOuterIdx < 2 )
     {
@@ -74,6 +89,12 @@ void main() {
     {
         outColor = vec3(0.0f, 0.0f, 0.0f);
     }
+
+    //if( iSubsetIdx == 2)
+    //{
+        //outColor = vec3(0.0f, 0.0f, 0.0f);
+        //return;
+    //}
 
     int iColorIdx = iOuterIdx - 2;  // Color index, [0...32]
 

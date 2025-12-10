@@ -189,6 +189,11 @@ void WriteUsb(float *pfColors, int numLEDs)
         flG = flG > 1.0f ? 1.0f : (flG < 0 ? 0 : flG);
         flB = flB > 1.0f ? 1.0f : (flB < 0 ? 0 : flB);
 
+        // gamma correct
+        flR = powf(flR, 1.7f);
+        flG = powf(flG, 1.7f);
+        flB = powf(flB, 1.7f);
+
         // scale
         int r = (int)(flR * 255.f + 0.5f);
         int g = (int)(flG * 255.f + 0.5f);

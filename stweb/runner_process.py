@@ -59,8 +59,16 @@ def runshader_with_timeout(shader_text, timeout_seconds=300):
 
     return run_result
 
+def sqlite_enable_wal():
+    if connection.vendor != "sqlite":
+        return
+    with connection.cursor() as c:
+        c.execute("PRAGMA journal_mode=WAL;")
+        c.execute("PRAGMA synchronous=NORMAL;")
+
 def main():
     init_django()
+    sqlite_enable_wal();
 
     from shader_app.models import Shader, ShaderVersion, ShaderPrefix, LedCoordsCfg  # TODO: ShaderResult
     

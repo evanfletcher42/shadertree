@@ -25,12 +25,12 @@
 
     <div id="content">
             <h2>About Shadertree</h2>
-            <p>Shadertree is a project by Evan Fletcher.</p>
-            <p>This server controls a 3D-scanned LED tree, set up near the kitchenette on 13F. The 3D positions of each LED are taken as inputs to vertex shaders written on this site, which animate the LEDs on the tree.</p>
+            <p>Shadertree is a project by Evan Fletcher and Charles Lohr.</p>
+            <p>This server controls a 3D-scanned LED tree, set up on 15F. The 3D positions of each LED are taken as inputs to vertex shaders written on this site, which animate the LEDs on the tree.</p>
             <p>Anyone can contribute a shader! Just click the "new" button at the top of the page. Anything that works in the editor should also work on the tree.</p>
             
             <h2>How does it work?</h2>
-            <p>The tree itself is a string of 500 addressible LEDs (WS2811), a Teensy LC (ARM Cortex M0+ uc), and a Steam Deck, which controls the LEDs and also hosts this site.</p>
+            <p>The tree itself is made out of about 5200 addressible LEDs, a custom board to drive them, and a Steam Deck, which controls the LEDs and also hosts this site.</p>
             <p>During setup, the LEDs are programmed to blink out unique error correcting-codes, used to identify each LED in a video of the tree. 
                 The tree is "scanned" by walking around it with a camera, using a reconstruction method vaguely similar to Bundler (Snavely et al, 2006). 
                 The result is a tree where every LED's 3D coordinates are known.            

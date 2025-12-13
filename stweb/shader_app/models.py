@@ -116,3 +116,11 @@ class BannedIP(models.Model):
 
     def __str__(self):
         return self.ip_address
+
+class PlaybackControl(models.Model):
+    # singleton row (pk=1)
+    force_shader = models.ForeignKey(
+        "Shader", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    force_nonce = models.BigIntegerField(default=0)  # increments on each request
+    updated_at = models.DateTimeField(auto_now=True)

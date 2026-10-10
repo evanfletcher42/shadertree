@@ -69,21 +69,45 @@
         <!-- Bottom Section -->
         <div class="section bottom-section">
             <p>Run Your Own Shader On This Tree:</p>
+
+            <!-- NEW: Play-now controls -->
+            <div style="margin-top: 0.75em;">
+                <select id="shaderSelect" style="font-size: 2.5em; padding: 0.2em 0.4em; max-width: 80vw; width:auto; background-color:#A0A0A0">
+                    <option value="">Select a shader…</option>
+                </select>
+                <button id="playNowBtn" style="font-size: 2.5em; padding: 0.2em 0.6em; margin-left: 0.4em;">
+                    Play Now
+                </button>
+            </div>
+
             <a href="#">shadertree.valve.org</a>
         </div>
     </div>
 </body>
 
 <script>
+    function getCookie(name) {
+        // Standard Django CSRF cookie helper
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
     async function updateNowPlaying() {
         try {
             const response = await fetch('/api/now_playing');
-            if (!response.ok) {
-                throw new Error(`Response status: (${response.status})`);
-            }
+            if (!response.ok) throw new Error(`Response status: (${response.status})`);
             const data = await response.json();
 
-            // Update the DOM elements with fetched data
             document.getElementById('title').textContent = data.now_playing || 'Title Unavailable';
             document.getElementById('author').textContent = `By ${data.author || 'Author Unavailable'}`;
         } catch (error) {
@@ -91,11 +115,81 @@
         }
     }
 
+    async function loadShaderDropdown() {
+        try {
+            const response = await fetch('/shader_list/');
+            if (!response.ok) throw new Error(`Response status: (${response.status})`);
+            const shaders = await response.json(); // [{title, author, ident, is_playable}, ...]
+
+            const sel = document.getElementById('shaderSelect');
+            const previous = sel.value; // preserve selection if it still exists
+
+            // Keep placeholder option
+            sel.length = 1;
+
+            // Frontend filter: playable only
+            const playable = shaders.filter(s => s.is_playable);
+
+            for (const s of playable) {
+                const opt = document.createElement('option');
+                opt.value = s.ident;
+                opt.textContent = s.title; // names only
+                sel.appendChild(opt);
+            }
+
+            // restore selection if still present
+            if (previous) {
+                const stillThere = Array.from(sel.options).some(o => o.value === previous);
+                if (stillThere) sel.value = previous;
+            }
+        } catch (error) {
+            console.error('Failed to load shader list:', error);
+        }
+    }
+
+    async function playSelectedShader() {
+        const ident = document.getElementById('shaderSelect').value;
+        if (!ident) return;
+
+        try {
+            const csrftoken = getCookie('csrftoken');
+
+            // TODO: adjust this URL to match your play-now endpoint.
+            // Example: /api/play_now/<ident>/
+            const response = await fetch(`/api/play_now/${encodeURIComponent(ident)}/`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                },
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                console.error("Play-now failed:", response.status, text);
+                throw new Error(text);
+            }
+
+            // Optional: refresh Now Playing soon after
+            setTimeout(updateNowPlaying, 250);
+        } catch (error) {
+            console.error('Failed to play selected shader:', error);
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         updateNowPlaying();
-        setInterval(updateNowPlaying, 5000);
-    });
+        loadShaderDropdown();
 
+        setInterval(updateNowPlaying, 5000);
+        setInterval(loadShaderDropdown, 5000);
+
+        document.getElementById('playNowBtn').addEventListener('click', playSelectedShader);
+
+        // If you want it to play immediately when chosen (no button), uncomment:
+        // document.getElementById('shaderSelect').addEventListener('change', playSelectedShader);
+    });
 </script>
+
 
 </html>

@@ -2,8 +2,10 @@ from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse, Http404
 from django.template import loader
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.db import transaction
+from django.db.models import F
 from .utils import get_client_ip
-from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg
+from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, PlaybackControl
 import json
 
 def index(request):
@@ -217,7 +219,7 @@ def api_delete_shader(request):
 
 @require_GET
 def shader_list(request):
-    shaders = Shader.objects.filter(is_deleted=False).order_by('created_at').values('title', 'author', 'ident')
+    shaders = Shader.objects.filter(is_deleted=False).order_by('created_at').values('title', 'author', 'ident', 'is_playable')
     shader_list = list(shaders)  # QuerySet->List
     return JsonResponse(shader_list, safe=False)
 
@@ -244,3 +246,18 @@ def api_now_playing(request):
             "author": None
         }
     return JsonResponse(data)
+
+@require_POST
+def play_now(request, ident: str):
+    shader = get_object_or_404(Shader, ident=ident, is_deleted=False, is_playable=True)
+
+    # ensure singleton exists.
+    PlaybackControl.objects.get_or_create(pk=1)
+
+    with transaction.atomic():
+        PlaybackControl.objects.filter(pk=1).update(
+            force_shader_id=shader.id,          # <-- IMPORTANT
+            force_nonce=F("force_nonce") + 1,
+        )
+
+    return JsonResponse({"ok": True, "ident": shader.ident, "title": shader.title})

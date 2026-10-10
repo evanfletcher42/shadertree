@@ -12,5 +12,5 @@ urlpatterns = [
     path("about", views.about, name="about"),
     path("api/save", views.api_edit_shader, name="api_edit_shader"),
     path("api/delete", views.api_delete_shader, name="api_delete_shader"),
-    path("api/now_playing", views.api_now_playing, name="api_now_playing")
-]
+    path("api/now_playing", views.api_now_playing, name="api_now_playing"),
+    path("api/play_now/<str:ident>/", views.play_now, name="api_play_now"),]

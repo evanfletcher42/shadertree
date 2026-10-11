@@ -15,6 +15,7 @@ BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pOb
 	: m_pObservations(pObservations)
 {
 	// No points are initialized (yet)
+	memset(m_ledPoints, 0, sizeof(m_ledPoints));
 	memset(m_pointsInitialized, 0, sizeof(m_pointsInitialized));
 
 	// Initial alignment transform -> identity
@@ -815,13 +816,11 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	// Parallel processing: Use a number of threads appropriate for the machine and the problem
 	int k_nMinimumResidualsPerThread = 16;
-	int nMachineThreads = std::thread::hardware_concurrency();
-	nMachineThreads = MAX(nMachineThreads, 8);  // nMachineThreads may be 0 if detection fails.  8 threads seems sane for a ~2021 PC.
+	int nMachineThreads = (m_nThreads > 0) ? m_nThreads : (int)std::thread::hardware_concurrency();
+	if (nMachineThreads <= 0)
+		nMachineThreads = 8;  // detection failed
 
-	int nSolveThreads = MIN(nMachineThreads, problem.NumResidualBlocks() / k_nMinimumResidualsPerThread);
-	nSolveThreads = MAX(nSolveThreads, 1);
-
-	options.num_threads = nSolveThreads;
+	options.num_threads = std::clamp(problem.NumResidualBlocks() / k_nMinimumResidualsPerThread, 1, nMachineThreads);
 
 	options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
 	options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
@@ -837,14 +836,14 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 	// TBD: Convergence tuning...
 
 	// Visualizer callback
-	options.callbacks.push_back(new VisualizerCallback(this, &m_visualizer));
+	VisualizerCallback visualizerCallback(this, &m_visualizer);
+	options.callbacks.push_back(&visualizerCallback);
 	options.update_state_every_iteration = true;
 
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
 
-	printf(summary.BriefReport().c_str());
-	printf("\n");
+	printf("%s\n", summary.BriefReport().c_str());
 
 	// Reprojection RMS without the robust loss, for comparing runs
 	ceres::Problem::EvaluateOptions evalOptions;

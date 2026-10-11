@@ -89,8 +89,10 @@ public:
 	// Each pose describes the change of basis from world coordinates to camera coodrinates.
 	std::unordered_map< int, std::array<double, 6> > m_cameraFromWorldPoses;
 
+	// Ceres threads; 0 = one per core.  Ceres' multithreaded Schur elimination isn't bit-reproducible.
+	int m_nThreads = 0;
+
 	// LED points in 3D space ("the map")
-	// TBD: Heap?  std::vector?  (this is big)
 	double m_ledPoints[k_nMaxLeds][3];
 
 	// Marks whether a given LED has been initialized.

@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <math.h>
+#include <memory>
 #include <string>
 
 #include <ceres/ceres.h>
@@ -22,7 +23,8 @@ int main(int argc, char** argv)
         ("dump-observations", "Directory for per-video observation JSONs (written, and reused when newer than the video)", cxxopts::value<std::string>())
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
         ("s,solution", "Output unaligned solution JSON path (optional)", cxxopts::value<std::string>())
-        ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>());
+        ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>())
+        ("threads", "Solver threads (default: one per core; 1 makes runs bit-reproducible)", cxxopts::value<int>()->default_value("0"));
 
     std::string videoDir;
     std::string observationsDir;
@@ -30,6 +32,7 @@ int main(int argc, char** argv)
     std::string calPath;
     std::string outSolutionPath;
     std::string outJsonPath;
+    int nThreads = 0;
 
     try
     {
@@ -55,6 +58,8 @@ int main(int argc, char** argv)
         else if (videoDir.empty())
             throw cxxopts::option_required_exception("output");
 
+        nThreads = result["threads"].as<int>();
+
         if (result.count("calibration"))
             calPath = result["calibration"].as<std::string>();
         else if (!outJsonPath.empty())
@@ -78,7 +83,10 @@ int main(int argc, char** argv)
     if (outJsonPath.empty())
         return 0;
 
-    BundleAdjuster bundleAdjuster(&observationSet.m_observations);
+    // Big: keep it off the stack
+    std::unique_ptr<BundleAdjuster> pBundleAdjuster = std::make_unique<BundleAdjuster>(&observationSet.m_observations);
+    BundleAdjuster& bundleAdjuster = *pBundleAdjuster;
+    bundleAdjuster.m_nThreads = nThreads;
 
     if (!bundleAdjuster.LoadCameraCalibrationFromJson(calPath))
     {

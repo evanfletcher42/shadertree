@@ -6,14 +6,11 @@
 
 #include <ceres/ceres.h>
 #include <cxxopts.hpp>
-#include <glog/logging.h>
 
 #include "bundleadjustment.h"
 
 int main(int argc, char** argv)
 {
-    google::InitGoogleLogging(argv[0]);
-
     // Command line options
     cxxopts::Options options("ledreconstruct", "Reconstruct 3D locations of LEDs on an addressible light string.");
     options.add_options()

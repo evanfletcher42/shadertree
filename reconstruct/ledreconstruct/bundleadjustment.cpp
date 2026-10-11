@@ -1074,7 +1074,7 @@ bool BundleAdjuster::FindAlignmentTransform()
 
 	ceres::Solver::Options options;
 	options.num_threads = 1;
-	options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
+	options.linear_solver_type = ceres::LinearSolverType::DENSE_QR;
 	options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
 	options.use_nonmonotonic_steps = true;
 	options.max_num_iterations = 100;

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Linux dev setup: installs the solver's dependencies (apt or pacman) and creates .venv. Safe to re-run.
+# Linux dev setup. Safe to re-run.
+# Installs the solver's dependencies (apt or pacman) and creates .venv.
 # Usage: ./setup-dev.sh [--no-venv]
 set -e
 cd "$(dirname "$0")"

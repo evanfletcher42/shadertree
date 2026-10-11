@@ -94,7 +94,8 @@ bool BundleAdjuster::LoadCameraCalibrationFromJson(std::string& jsonPath)
 
 bool BundleAdjuster::InitializeBA()
 {
-	// Most-shared pairs first; frame 1 (the origin) is the member with more LEDs.
+	// Pairs that share the most LEDs go first.
+	// Frame 1 (the origin) is the one with more LEDs.
 	StageClock_t::time_point pairSearchStart = StageClock_t::now();
 	int nFrames = (int)m_pObservations->size();
 	std::vector< std::array<int, 3> > pairs;  // shared LEDs, frame 1, frame 2
@@ -254,7 +255,7 @@ bool BundleAdjuster::Reconstruct()
 	SetupBundleAdjustmentProblem(problem4, true, true, true);
 	SolveProblem(problem4);
 
-	// After all solves: interpolated LEDs aren't observed, so BA would never move them.
+	// After all solves, since BA can't move unobserved LEDs.
 	InterpolateNewPoints();
 
 	printf("Reconstruct complete\n");
@@ -627,7 +628,7 @@ int BundleAdjuster::TriangulateConsensus(int nLedIdx, const std::vector<int>& fr
 	if (best.size() * 2 > frames.size())
 		return (int)best.size();
 
-	// A few consistent bad observations (a reflection seen from adjacent views) can outvote the rest in a DLT over all.
+	// A few consistent bad observations can outvote the rest, e.g. a reflection seen from adjacent views.
 	for (int i = 0; i < (int)frames.size(); i++)
 	{
 		for (int j = i + 1; j < (int)frames.size(); j++)
@@ -684,8 +685,9 @@ std::vector<int> BundleAdjuster::TriangulateSubset(int nLedIdx, const std::vecto
 
 int BundleAdjuster::InterpolateNewPoints()
 {
-	// Strings are nearly straight between neighbors: across a gap of 3, 90% of LEDs land within 0.9 LED spacings.
-	// Never across strands, never past a strand's last solved LED (its tail is real).
+	// Strings are nearly straight between neighbors.
+	// Across a gap of 3, 90% of LEDs land within 0.9 LED spacings.
+	// Never fill across strands or past a strand's last solved LED.
 	std::vector<double> pitches;
 	for (int i = 0; i + 1 < k_nMaxLeds; i++)
 	{
@@ -720,7 +722,7 @@ int BundleAdjuster::InterpolateNewPoints()
 			continue;
 		}
 
-		// The straight line between the ends can't be longer than the string between them; if it is, an end is misplaced.
+		// Ends farther apart than the string between them means one is misplaced.
 		cv::Vec3d first(m_ledPoints[nFirst]);
 		cv::Vec3d last(m_ledPoints[i]);
 		if (cv::norm(last - first) > k_flMaxInterpChordRatio * (nGap + 1) * flPitch)
@@ -864,7 +866,7 @@ int BundleAdjuster::CullReprojectionOutliers()
 		nCamerasRemoved++;
 	}
 
-	// An LED placed while only a few bad views were posed would otherwise lose all its good observations here.
+	// Otherwise an LED placed from a few bad views would lose all its good observations.
 	int nRetriangulated = 0;
 	for (const auto& kv : FindObservingFrames(true))
 	{
@@ -1010,7 +1012,7 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	options.num_threads = std::clamp(problem.NumResidualBlocks() / k_nMinimumResidualsPerThread, 1, nMachineThreads);
 
-	// ~150 cameras: the reduced camera matrix is small enough (~1000^2) to factor densely.
+	// ~150 cameras keep the reduced camera matrix small (~1000^2), so factor it densely.
 	options.linear_solver_type = ceres::LinearSolverType::DENSE_SCHUR;
 	options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
 	options.use_nonmonotonic_steps = true;
@@ -1019,7 +1021,8 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	options.minimizer_progress_to_stdout = true;
 
-	// No explicit linear_solver_ordering: Ceres orders user groups by block address, which breaks reproducibility.
+	// No explicit linear_solver_ordering.
+	// Ceres orders user groups by block address, which isn't reproducible.
 
 	// TBD: Convergence tuning...
 
@@ -1239,7 +1242,8 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	if (points.empty())
 		return false;
 
-	// The alignment puts the tree's axis on Z.  It's a cone, so the half nearer its wide end has the larger median radius.
+	// The alignment puts the tree's axis on Z.
+	// It's a cone, so the wide half has the larger median radius.
 	std::vector<double> heights;
 	for (const std::array<double, 3>& p : points)
 	{
@@ -1259,7 +1263,8 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	if (bFlip)
 		bZUp = !bZUp;
 
-	// Z up -> Y up: (x, y, z) -> (x, z, -y).  Upside down first rotates 180 degrees about X: (x, -z, y).
+	// Z up -> Y up: (x, y, z) -> (x, z, -y).
+	// Upside down first rotates 180 degrees about X: (x, -z, y).
 	double flSign = bZUp ? 1.0 : -1.0;
 	double flMinY = DBL_MAX;
 	double flMaxY = -DBL_MAX;

@@ -1,4 +1,5 @@
-# Build-only check of the reconstruction solver. Manual trigger only (Actions > reconstruct > Run workflow).
+# Build-only check of the reconstruction solver.
+# Run by hand: Actions > reconstruct > Run workflow.
 name: reconstruct
 
 on: workflow_dispatch
@@ -22,7 +23,7 @@ jobs:
           if ( $LASTEXITCODE -ne 0 ) { exit 1 }
           cmake --build --preset windows-release
           if ( $LASTEXITCODE -ne 0 ) { exit 1 }
-          # No arguments: prints usage and exits 1. Anything else means it failed to load.
+          # Without arguments it prints usage and exits 1; anything else means it failed to load.
           build/windows/Release/ledreconstruct.exe
           if ( $LASTEXITCODE -ne 1 ) { exit 1 }
           exit 0

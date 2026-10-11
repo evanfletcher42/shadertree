@@ -199,7 +199,8 @@ void main() {}
 // Render Program Setup
 // ------------------------
 
-// The display already emits ~color^2.2, so this makes its light output match the LEDs' color^ledGamma
+// The display already emits ~color^2.2.
+// This makes its light output match the LEDs' color^ledGamma.
 const displayGamma = parseFloat(data.ledgamma) / 2.2;
 
 // vertex shader for UI preview

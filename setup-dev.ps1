@@ -1,4 +1,5 @@
-# Windows dev setup: checks Visual Studio, sets VCPKG_ROOT, creates .venv. Safe to re-run.
+# Windows dev setup. Safe to re-run.
+# Checks Visual Studio, sets VCPKG_ROOT, creates .venv.
 # Usage: powershell -ExecutionPolicy Bypass -File setup-dev.ps1
 $root = $PSScriptRoot
 $vsconfig = "$root\reconstruct\.vsconfig"

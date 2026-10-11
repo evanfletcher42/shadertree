@@ -16,7 +16,7 @@ import numpy as np
 FPS = 59.94  # ledcodes.glsl
 WIDTH, HEIGHT = 1920, 1080
 NUM_FRAMES = 3 * 70  # three 35-slot cycles at 2 frames/slot
-FILL = (0.9, 1.8)  # tree height as a fraction of image width (real footage is rolled ~90deg, tip right)
+FILL = (0.9, 1.8)  # tree height / image width; real footage is rolled ~90deg
 ROLL_DEG = (85, 95)
 EXPOSURE = 0.5  # fraction of a frame the shutter is open
 BLOB_SIGMA = 2.5
@@ -24,7 +24,7 @@ GAIN = 12000.0  # saturates bright blob cores like real footage
 BACKGROUND = 4.0
 NOISE_SIGMA = 3.0
 DROPOUT = 0.05
-BACK_OCCLUSION = -0.3  # hide LEDs whose radial direction faces away from the camera beyond this cosine
+BACK_OCCLUSION = -0.3  # cosine past which LEDs facing away from the camera are hidden
 CROSSTALK = np.array([[1.0, 0.12, 0.03],
                       [0.10, 1.0, 0.15],
                       [0.04, 0.20, 1.0]])  # rows: R, G, B emitter -> camera RGB

@@ -12,7 +12,8 @@
 #include "ledconstants.h"
 #include "stagetimes.h"
 
-// Moving-sum width over per-frame mean intensity; also how far from either end a sync peak must be.
+// Moving-sum width over per-frame mean intensity.
+// Also how far from either end a sync peak must be.
 static constexpr int k_nSyncWindowFrames = 5;
 
 // A sync peak must rise this fraction of the way from the median to the max of the moving sum.
@@ -27,16 +28,19 @@ static constexpr double k_flSyncGapTolerance = 0.05;
 // Warn if the container fps is off by more than this fraction.
 static constexpr double k_flFpsTolerance = 0.01;
 
-// Warn if the measured cycle length is off by more than this; peaks are whole frames, so +-1 is rounding.
+// Warn if the measured cycle length is off by more than this.
+// Peaks are whole frames, so +-1 is rounding.
 static constexpr double k_flCycleToleranceFrames = 1.5;
 
-// Only scan this many cycles' worth of frames for sync; 2.5 always holds two whole pulses away from the ends.
+// Only scan this many cycles' worth of frames for sync.
+// 2.5 always holds two whole pulses away from the ends.
 static constexpr double k_flMaxScanCycles = 2.5;
 
 // Smaller same-index blobs are noise.
 static constexpr int k_nMinBlobPixels = 9;
 
-// (8, 4, 4)_2 augmented Hadamard code: codeword bits MSB-first, indexed by nibble.
+// (8, 4, 4)_2 augmented Hadamard code, indexed by nibble.
+// Codeword bits are MSB-first.
 static constexpr uint8_t k_hadamardCodewords[16] =
 {
 	0x00, 0x55, 0x33, 0x66, 0x0F, 0x5A, 0x3C, 0x69,
@@ -76,7 +80,7 @@ static double ExpectedCycleFrames( double flFps )
 }
 
 
-// Opponent-color argmax; ties resolve to the earlier of R, G, B.
+// Ties go to the earlier of R, G, B.
 static uint8_t ClassifyColor( const uint8_t *pBgr )
 {
 	uint8_t b = pBgr[0];
@@ -90,9 +94,9 @@ static uint8_t ClassifyColor( const uint8_t *pBgr )
 }
 
 
-// Per-pixel color classes of a frame, 2 bits each, 4 pixels per byte in row-major order.
-// Packed because the scan keeps one per frame (sync isn't known until the scan ends) for every video in flight:
-// ~90 MB per 1080p video instead of ~350 MB with a byte per pixel.
+// Color class per pixel: 2 bits each, 4 pixels per byte, row-major.
+// Packed because the scan keeps one per frame for every video in flight.
+// ~90 MB per 1080p video instead of ~350 MB.
 using ColorMap_t = std::vector< uint8_t >;
 
 static ColorMap_t ClassifyFrame( const cv::Mat &frame )
@@ -118,8 +122,9 @@ static uint8_t GetColor( const ColorMap_t &colors, size_t i )
 }
 
 
-// One pass over up to k_flMaxScanCycles cycles: mean intensity (for sync) and color classes of every frame.
-// If pBrightest is set, also keeps the brightest frame (a sync frame: every LED lit white) in grayscale.
+// One pass over up to k_flMaxScanCycles cycles.
+// Collects each frame's mean intensity (for sync) and color classes.
+// If pBrightest is set, also keeps the brightest frame in grayscale.
 static bool ScanVideo( std::vector< double > *pIntensities, std::vector< ColorMap_t > *pColorMaps, cv::Size *pFrameSize, double *pflFps, cv::Mat *pBrightest, const std::string &videoPath )
 {
 	cv::VideoCapture cap( videoPath );
@@ -240,10 +245,11 @@ static bool FindSyncCycle( int *pnStart, int *pnEnd, const std::vector< int > &p
 
 
 // Accumulates per-pixel transition bits over the color slots of one cycle:
-// R->G->B->R is a 1, the reverse a 0, no change an erasure (clears *pKnown).
-// The LEDs change color at a phase that drifts against the camera's rolling shutter, so the frame at a slot center can
-// still show the previous color (or already the next) in some rows. Every slot changes color, so each pixel takes the
-// first of the frames before, at and after the center whose color differs from its previous slot's.
+// - R->G->B->R is a 1
+// - the reverse is a 0
+// - no change is an erasure (clears *pKnown)
+// Rolling shutter can show a slot's neighbor color in some rows, even at the slot center.
+// Every slot changes color, so take the first of before/center/after that differs from the previous slot.
 static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstColor, const std::vector< ColorMap_t > &colorMaps, cv::Size frameSize, int nSyncStart, int nSyncEnd )
 {
 	double flSlotFrames = ( nSyncEnd - nSyncStart ) / ( double )k_nCycleSlots;
@@ -258,7 +264,7 @@ static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstCol
 	size_t nPixels = frameSize.area();
 	std::vector< uint8_t > prevColors( nPixels );
 
-	// Sync peak is the boundary between the two sync slots, so color slot k is centered k + 1.5 slots later.
+	// The sync peak is between the two sync slots, so color slot k is centered k + 1.5 slots later.
 	for ( int k = 0; k < k_nColorSlots; k++ )
 	{
 		size_t nFrame = ( size_t )( nSyncStart + flSlotFrames * ( k + 1.5 ) + 0.5 );
@@ -314,7 +320,8 @@ static int DecodeNibble( uint8_t nCodeword )
 }
 
 
-// LED index, or a negative k_nLabel*. Only exact codewords are accepted: a speculative decode is worse than none.
+// LED index, or a negative k_nLabel*.
+// Exact codewords only: a wrong decode is worse than none.
 static int DecodePixel( uint32_t nCode, uint8_t nFirstColor )
 {
 	int nLedIdx = 0;
@@ -417,10 +424,13 @@ static void FindBlobs( std::vector< PointObservation_t > *pObservations, int *pn
 }
 
 
-// Brightest frame at half brightness, overlaid per pixel: decoded pixels in their LED's color (golden-ratio hues, so
-// neighboring indices contrast), bad codewords tinted red, valid codewords with a bad index or color phase tinted blue,
-// erasures left as background. Each observation gets a white circle (area = blob pixels) and its index; colored blobs
-// without one were too small or lost to a larger blob of the same index.
+// Brightest frame at half brightness, overlaid per pixel:
+// - decoded: the LED's color (golden-ratio hues, so neighbors contrast)
+// - bad codeword: red tint
+// - bad index or color phase: blue tint
+// - erasure: background
+// Each observation gets a white circle (area = blob pixels) and its index.
+// Colored blobs without a circle were too small or lost to a larger same-index blob.
 static void RenderDecodeImage( const cv::Mat &labels, const cv::Mat &brightest, const std::vector< PointObservation_t > &observations, const std::string &path )
 {
 	cv::Mat ledColors( 1, k_nMaxLeds, CV_8UC3 );

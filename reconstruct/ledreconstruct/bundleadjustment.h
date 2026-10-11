@@ -22,7 +22,7 @@ public:
 	// Load a camera calibration from a JSON file.
 	bool LoadCameraCalibrationFromJson(std::string& jsonPath);
 
-	// Initialize from the frame pair sharing the most LEDs with parallax (motion no homography explains).
+	// Initialize from the frame pair with parallax that shares the most LEDs.
 	bool InitializeBA();
 
 	// Attempt to reconstruct everything.  Runs the entire process.
@@ -47,17 +47,18 @@ public:
 	// Returns the number of new cameras initialized.  
 	int InitializeNewCameras();
 
-	// Initialize uninitialized LEDs seen by 2+ posed frames, by TriangulateConsensus.
+	// Triangulate uninitialized LEDs seen by 2+ posed frames.
 	int TriangulateNewPoints();
 
 	// Posed frames observing each LED whose m_pointsInitialized is bInitialized.
 	std::unordered_map< int, std::vector< int > > FindObservingFrames( bool bInitialized ) const;
 
-	// Triangulates an LED into m_ledPoints from its observations in frames: DLT over all of them, or, if no more than
-	// half agree with that, over the agreeing observations of the best 2-frame DLT.  Returns the number that agree.
+	// Triangulate an LED into m_ledPoints. Returns how many observations agree.
+	// Tries a DLT over all observations first.
+	// If no more than half agree, uses the observations that agree with the best 2-frame DLT.
 	int TriangulateConsensus( int nLedIdx, const std::vector< int > &frames );
 
-	// DLT over the subset of observations, into m_ledPoints; returns the indices of all observations that agree with it.
+	// DLT over a subset of observations. Returns every observation that agrees with it.
 	std::vector< int > TriangulateSubset( int nLedIdx, const std::vector< int > &frames, const std::vector< cv::Mat > &projections,
 		const std::vector< cv::Point2f > &undistorted, const std::vector< int > &subset );
 
@@ -77,9 +78,12 @@ public:
 	// Reprojection error of one observation in pixels; infinite if the point is behind the camera.
 	double ComputeReprojectionError(const std::array<double, 6>& cameraFromWorld, const PointObservation_t& obs) const;
 
-	// Drop cameras whose median reprojection error exceeds k_flMaxReprojectionErrorPx (for good), re-triangulate LEDs
-	// most of whose observations exceed it, then drop observations above it, then LEDs left with fewer than 2
-	// observations.  Returns the number of LEDs culled.
+	// In order, using k_flMaxReprojectionErrorPx:
+	// - drop cameras whose median error is above it, for good
+	// - re-triangulate LEDs where most observations are above it
+	// - drop observations above it
+	// - drop LEDs left with fewer than 2 observations
+	// Returns the number of LEDs culled.
 	int CullReprojectionOutliers();
 
 	// Set up a bundle adjustment problem over the entire map, as specified.
@@ -96,8 +100,10 @@ public:
 	// Output a file containing LED locations, after alignment.
 	bool WriteAlignedReconstructionToJson(const std::string& outPath);
 
-	// LedCoordsCfg coordinates: Y up, wide end down (bFlip inverts), y in [-1, 1], tree axis at x = z = 0.
-	// <basePath>.ledcoords.json: flat x,y,z per address, unmapped 0,0,0.  <basePath>.leds.json: [{addr, x, y, z, interpolated}].
+	// LedCoordsCfg coordinates: Y up, y in [-1, 1], tree axis at x = z = 0.
+	// Wide end down unless bFlip.
+	// Writes <basePath>.ledcoords.json: flat x,y,z per address, 0,0,0 if unmapped.
+	// Writes <basePath>.leds.json: [{addr, x, y, z, interpolated}].
 	bool WriteSiteCoordinatesToJson(const std::string& basePath, bool bFlip);
 
 	// The init pair must share at least this many LEDs.
@@ -110,14 +116,16 @@ public:
 	// A new camera's PnP solve must have at least this fraction of inliers.
 	static constexpr double k_flMinPnPInlierFrac = 0.8;
 
-	// Interpolation: longest gap filled; max end-to-end distance / ((gap + 1) * pitch).
+	// Longest gap interpolation fills.
 	static constexpr int k_nMaxInterpGap = 3;
+	// Max end-to-end distance across a gap, in units of (gap + 1) LED pitches.
 	static constexpr double k_flMaxInterpChordRatio = 1.1;
 
 	// Reprojection error above which an observation (or a camera's median) is an outlier.
 	static constexpr double k_flMaxReprojectionErrorPx = 10.0;
 
-	// Sorted by LED index within each frame.  Outlier observations are erased from these.
+	// Sorted by LED index within each frame.
+	// Outlier observations are erased from these.
 	std::vector< std::vector< PointObservation_t > >* m_pObservations;
 
 	// Cameras culled for a bad pose; never re-added.
@@ -127,7 +135,8 @@ public:
 	// Each pose describes the change of basis from world coordinates to camera coodrinates.
 	std::unordered_map< int, std::array<double, 6> > m_cameraFromWorldPoses;
 
-	// Ceres threads; 0 = one per core.  Ceres' multithreaded Schur elimination isn't bit-reproducible.
+	// Ceres threads; 0 = one per core.
+	// More than one isn't bit-reproducible.
 	int m_nThreads = 0;
 
 	// LED points in 3D space ("the map")
@@ -136,7 +145,8 @@ public:
 	// Marks whether a given LED has been initialized.
 	bool m_pointsInitialized[k_nMaxLeds];
 
-	// Interpolated, not solved: never in a solve or --output.
+	// Interpolated, not solved.
+	// Never in a solve or --output.
 	bool m_pointsInterpolated[k_nMaxLeds];
 
 private:

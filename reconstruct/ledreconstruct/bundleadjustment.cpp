@@ -547,8 +547,8 @@ int BundleAdjuster::TriangulateNewPoints()
 		if (frames.size() < 2)
 			continue;
 
-		std::uniform_int_distribution<int> d1(0, frames.size() - 1);
-		std::uniform_int_distribution<int> d2(0, frames.size() - 2);
+		std::uniform_int_distribution<int> d1(0, (int)frames.size() - 1);
+		std::uniform_int_distribution<int> d2(0, (int)frames.size() - 2);
 
 		// Choose random pairs & attempt triangulation up to a few times.
 		for (int nRetries = 0; nRetries < k_nMaxTriangulationRetries; nRetries++)

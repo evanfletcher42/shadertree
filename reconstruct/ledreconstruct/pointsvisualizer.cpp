@@ -187,15 +187,15 @@ void CPointsVisualizer::DrawTrackedPoints()
 
 		// draw XY
 		cv::Point2d pXY(flDrawX * k_nViewWidth, flDrawY * k_nViewHeight);
-		cv::circle(m_viewXY, pXY, 1.5, cv::Scalar(0, 255, 0), cv::FILLED, cv::LINE_AA);
+		cv::circle(m_viewXY, pXY, 1, cv::Scalar(0, 255, 0), cv::FILLED, cv::LINE_AA);
 
 		// draw YZ
 		cv::Point2d pYZ(flDrawY * k_nViewWidth, flDrawZ * k_nViewHeight);
-		cv::circle(m_viewYZ, pYZ, 1.5, cv::Scalar(0, 255, 0), cv::FILLED, cv::LINE_AA);
+		cv::circle(m_viewYZ, pYZ, 1, cv::Scalar(0, 255, 0), cv::FILLED, cv::LINE_AA);
 
 		// draw XZ
 		cv::Point2d pXZ(flDrawX * k_nViewWidth, flDrawZ * k_nViewHeight);
-		cv::circle(m_viewXZ, pXZ, 1.5, cv::Scalar(0, 255, 0), cv::FILLED, cv::LINE_AA);
+		cv::circle(m_viewXZ, pXZ, 1, cv::Scalar(0, 255, 0), cv::FILLED, cv::LINE_AA);
 
 		// TBD: Label IDs?  Might be too busy
 	}
@@ -229,15 +229,15 @@ void CPointsVisualizer::DrawCameraPoses()
 
 		// draw XY
 		cv::Point2d pXY(flDrawX * k_nViewWidth, flDrawY * k_nViewHeight);
-		cv::circle(m_viewXY, pXY, 1.5, cv::Scalar(255, 128, 128), cv::FILLED, cv::LINE_AA);
+		cv::circle(m_viewXY, pXY, 1, cv::Scalar(255, 128, 128), cv::FILLED, cv::LINE_AA);
 
 		// draw YZ
 		cv::Point2d pYZ(flDrawY * k_nViewWidth, flDrawZ * k_nViewHeight);
-		cv::circle(m_viewYZ, pYZ, 1.5, cv::Scalar(255, 128, 128), cv::FILLED, cv::LINE_AA);
+		cv::circle(m_viewYZ, pYZ, 1, cv::Scalar(255, 128, 128), cv::FILLED, cv::LINE_AA);
 
 		// draw XZ
 		cv::Point2d pXZ(flDrawX * k_nViewWidth, flDrawZ * k_nViewHeight);
-		cv::circle(m_viewXZ, pXZ, 1.5, cv::Scalar(255, 128, 128), cv::FILLED, cv::LINE_AA);
+		cv::circle(m_viewXZ, pXZ, 1, cv::Scalar(255, 128, 128), cv::FILLED, cv::LINE_AA);
 	}
 
 	// TBD: Draw orientation

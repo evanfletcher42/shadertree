@@ -63,13 +63,6 @@ static double Median( std::vector< double > values )
 }
 
 
-// Hardware decoding where available; falls back to software.
-static cv::VideoCapture OpenVideo( const std::string &videoPath )
-{
-	return cv::VideoCapture( videoPath, cv::CAP_FFMPEG, { cv::CAP_PROP_HW_ACCELERATION, cv::VIDEO_ACCELERATION_ANY } );
-}
-
-
 static double ExpectedCycleFrames( double flFps )
 {
 	return k_nCycleSlots * k_nFramesPerSlot * flFps / k_flCaptureFps;
@@ -79,7 +72,7 @@ static double ExpectedCycleFrames( double flFps )
 // Mean intensity of each frame, up to k_flMaxScanCycles cycles.
 static bool ReadFrameIntensities( std::vector< double > *pIntensities, double *pflFps, const std::string &videoPath )
 {
-	cv::VideoCapture cap = OpenVideo( videoPath );
+	cv::VideoCapture cap( videoPath );
 	if ( !cap.isOpened() )
 		return false;
 
@@ -213,7 +206,7 @@ static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstCol
 		sampleFrames.push_back( ( int )( nSyncStart + flSlotFrames * ( k + 1.5 ) + 0.5 ) );
 	}
 
-	cv::VideoCapture cap = OpenVideo( videoPath );
+	cv::VideoCapture cap( videoPath );
 	if ( !cap.isOpened() )
 		return false;
 

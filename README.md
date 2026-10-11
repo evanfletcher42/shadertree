@@ -34,7 +34,7 @@ Build inside an Arch container: `distrobox create --name arch --image archlinux:
 
 ### VS Code
 
-Open the repository root and install the recommended extensions (CMake Tools, C/C++, Python). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging), then use the `ledreconstruct` launch configurations, which solve from a directory of cached observation JSONs. Python completion for `stweb/` uses the `.venv` from the setup script. On Windows, restart VS Code after the first `setup-dev.ps1` run so it sees `VCPKG_ROOT`.
+Open the repository root and install the recommended extensions (CMake Tools, C/C++, Python). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging). Ctrl+Shift+B lists build tasks for each configuration; the `ledreconstruct` launch configurations build the selected preset first and which solve from a directory of cached observation JSONs. Python completion for `stweb/` uses the `.venv` from the setup script. On Windows, restart VS Code after the first `setup-dev.ps1` run so it sees `VCPKG_ROOT`.
 
 ### Other platforms
 

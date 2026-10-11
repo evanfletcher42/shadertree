@@ -52,7 +52,7 @@ if ( -not ( Test-Path "$root\.venv" ) )
     py -3.12 -m venv "$root\.venv"
     if ( $LASTEXITCODE -ne 0 ) { "Could not create .venv with Python 3.12 (winget install --id Python.Python.3.12)"; exit 1 }
 }
-& "$root\.venv\Scripts\python.exe" -m pip install --quiet -r "$root\stweb\requirements.txt" -r "$root\reconstruct\tools\requirements.txt"
+& "$root\.venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check -r "$root\stweb\requirements.txt" -r "$root\reconstruct\tools\requirements.txt"
 if ( $LASTEXITCODE -ne 0 ) { "pip install failed"; exit 1 }
 "Python: $root\.venv"
 

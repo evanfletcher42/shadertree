@@ -1,0 +1,13 @@
+{
+	// Ctrl+Shift+B lists these. CMake Tools runs configure first when needed.
+	"version": "2.0.0",
+	"tasks": [
+		{ "label": "Solver: build (selected CMake preset)", "type": "cmake", "command": "build", "group": "build", "problemMatcher": [ "$msCompile", "$gcc" ] },
+		{ "label": "Solver: build RelWithDebInfo (Windows)", "type": "cmake", "command": "build", "preset": "windows-relwithdebinfo", "group": "build", "problemMatcher": [ "$msCompile" ] },
+		{ "label": "Solver: build Release (Windows)", "type": "cmake", "command": "build", "preset": "windows-release", "group": "build", "problemMatcher": [ "$msCompile" ] },
+		{ "label": "Solver: build Debug (Windows)", "type": "cmake", "command": "build", "preset": "windows-debug", "group": "build", "problemMatcher": [ "$msCompile" ] },
+		{ "label": "Solver: build (Linux)", "type": "cmake", "command": "build", "preset": "linux", "group": "build", "problemMatcher": [ "$gcc" ] },
+		{ "label": "Solver: configure", "type": "cmake", "command": "configure", "problemMatcher": [] },
+		{ "label": "Solver: clean rebuild", "type": "cmake", "command": "cleanRebuild", "group": "build", "problemMatcher": [ "$msCompile", "$gcc" ] }
+	]
+}

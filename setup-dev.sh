@@ -17,7 +17,7 @@ fi
 
 if [ "$1" != "--no-venv" ]; then
 	[ -d .venv ] || python3 -m venv .venv
-	.venv/bin/python -m pip install --quiet -r stweb/requirements.txt -r reconstruct/tools/requirements.txt
+	.venv/bin/python -m pip install --quiet --disable-pip-version-check -r stweb/requirements.txt -r reconstruct/tools/requirements.txt
 fi
 
 echo "Done. Build the solver with: cd reconstruct && cmake --preset linux && cmake --build --preset linux -j"

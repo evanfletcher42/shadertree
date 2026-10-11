@@ -1,10 +1,11 @@
 {
 	"builtin-baseline": "e456309491fd875487bf02b8a0dca76c1b1b00cc",
 	"dependencies": [
-		{ "name": "ceres", "features": [ "schur" ] },
+		{ "name": "ceres", "features": [ "lapack", "schur" ] },
 		"cxxopts",
 		"eigen3",
 		"jsoncpp",
+		{ "name": "openblas", "features": [ "dynamic-arch" ], "platform": "!windows | mingw" },
 		{
 			"name": "opencv4",
 			"default-features": false,

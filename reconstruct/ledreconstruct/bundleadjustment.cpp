@@ -1012,6 +1012,8 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	// ~150 cameras: the reduced camera matrix is small enough (~1000^2) to factor densely.
 	options.linear_solver_type = ceres::LinearSolverType::DENSE_SCHUR;
+	if (ceres::IsDenseLinearAlgebraLibraryTypeAvailable(ceres::LAPACK))
+		options.dense_linear_algebra_library_type = ceres::LAPACK;
 	options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
 	options.use_nonmonotonic_steps = true;
 

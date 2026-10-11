@@ -33,7 +33,8 @@ def render_editor(request, context):
     context.update({
         "ledcoords": coords_obj.content if coords_obj else [],
         "shaderprefix": ShaderPrefix.program_prefix(),
-        "playseconds": settings.SHADER_PLAY_SECONDS
+        "playseconds": settings.SHADER_PLAY_SECONDS,
+        "ledgamma": settings.LED_GAMMA
     })
     return render(request, "shader_app/editor.html", context)
 

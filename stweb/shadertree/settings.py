@@ -127,3 +127,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # How long each shader runs on the tree; the editor preview loops over the same period
 SHADER_PLAY_SECONDS = 30
+
+# LED light output is color^LED_GAMMA (runshader.cpp WriteUsb); the editor preview reproduces it
+LED_GAMMA = 1.7

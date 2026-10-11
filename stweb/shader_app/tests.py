@@ -101,6 +101,7 @@ class EditorPageTests(TestCase):
     def test_new(self):
         resp = self.client.get("/edit/new/")
         self.assertContains(resp, 'data-playseconds="30"')
+        self.assertContains(resp, 'data-ledgamma="1.7"')
         self.assertContains(resp, '<script id="ledcoords" type="application/json">[0.0, 1.0, 2.0]</script>', html=True)
 
     def test_prefix(self):

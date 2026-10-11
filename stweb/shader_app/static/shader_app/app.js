@@ -176,6 +176,9 @@ void main() {}
 // Render Program Setup
 // ------------------------
 
+// The display already emits ~color^2.2, so this makes its light output match the LEDs' color^ledGamma
+const displayGamma = parseFloat(data.ledgamma) / 2.2;
+
 // vertex shader for UI preview
 // Output colors from the user's shader are used here
 const renderVertexSource = `#version 300 es
@@ -201,7 +204,7 @@ void main() {
 
     gl_Position = uProjectionMatrix * viewPos;
     gl_PointSize = 10.0f * f / zd;
-    vColor = aColor;
+    vColor = pow(clamp(aColor, 0.0, 1.0), vec3(${displayGamma.toFixed(4)}));
 }
 `;
 

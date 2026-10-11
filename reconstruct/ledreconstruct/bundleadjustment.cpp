@@ -926,8 +926,20 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	options.minimizer_progress_to_stdout = true;
 
-	// TBD: This is a bundle adjustment problem - we may be able to save a bit of preprocessing time by specifying
-	//		an explicit linear_solver_ordering that splits all points and all cameras into separate groups.
+	// Schur ordering: eliminate the free points (3-vectors) first, then poses and intrinsics.
+	std::vector<double*> parameterBlocks;
+	problem.GetParameterBlocks(&parameterBlocks);
+
+	std::shared_ptr<ceres::ParameterBlockOrdering> pOrdering = std::make_shared<ceres::ParameterBlockOrdering>();
+	for (double* pBlock : parameterBlocks)
+	{
+		bool bFreePoint = problem.ParameterBlockSize(pBlock) == 3 && !problem.IsParameterBlockConstant(pBlock);
+		pOrdering->AddElementToGroup(pBlock, bFreePoint ? 0 : 1);
+	}
+
+	// Pose-only solves have no free points; let Ceres pick then.
+	if (pOrdering->GroupSize(0) > 0)
+		options.linear_solver_ordering = pOrdering;
 
 	// TBD: Convergence tuning...
 

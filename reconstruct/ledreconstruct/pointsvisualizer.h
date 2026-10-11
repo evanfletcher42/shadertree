@@ -9,6 +9,8 @@
 
 #include <opencv2/highgui.hpp>
 
+#include "ledconstants.h"
+
 
 class CPointsVisualizer
 {
@@ -67,8 +69,8 @@ private:
 
 	// Local copies of camera and point poses
 	std::unordered_map< int, std::array<double, 6> > m_cameraFromWorldPoses;
-	double m_ledPoints[215*32*2][3];
-	bool m_bLedsInitialized[215 * 32 * 2];
+	double m_ledPoints[k_nMaxLeds][3];
+	bool m_bLedsInitialized[k_nMaxLeds];
 
 	// new-data-available flag
 	bool m_bNewDataAvailable;

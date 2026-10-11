@@ -6,11 +6,9 @@
 #include <ceres/ceres.h>
 #include <cxxopts.hpp>
 #include <glog/logging.h>
-#include <opencv2/imgcodecs.hpp>
 
 #include "bundleadjustment.h"
-//#include "pointtracker.h"
-#include "jsontracker.h"
+#include "observationset.h"
 
 int main(int argc, char** argv)
 {
@@ -19,76 +17,68 @@ int main(int argc, char** argv)
     // Command line options
     cxxopts::Options options("ledreconstruct", "Reconstruct 3D locations of LEDs on an addressible light string.");
     options.add_options()
-        ("v,video", "Path to input video", cxxopts::value<std::string>())
+        ("videos", "Directory of videos to decode", cxxopts::value<std::string>())
+        ("observations", "Directory of observation JSONs to solve from (instead of --videos)", cxxopts::value<std::string>())
+        ("dump-observations", "Directory for per-video observation JSONs (written, and reused when newer than the video)", cxxopts::value<std::string>())
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
         ("s,solution", "Output unaligned solution JSON path (optional)", cxxopts::value<std::string>())
-        ("o,output", "Output aligned points JSON path", cxxopts::value<std::string>());
+        ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>());
 
-    // Path to the video to process.
-    std::string videoPath;
-    
-    // Path to the camera calibration JSON file.
+    std::string videoDir;
+    std::string observationsDir;
+    std::string dumpDir;
     std::string calPath;
-
-    // (Optional) path for output solver solution, with camera poses and points in an unaligned csys.
     std::string outSolutionPath;
-    bool bOutputSolution = false;
-
-    // Path for output reconstructed points only, in an aligned csys.
     std::string outJsonPath;
 
     try
     {
         cxxopts::ParseResult result = options.parse(argc, argv);
 
-        if (result.count("video"))
-        {
-            videoPath = result["video"].as<std::string>();
-        }
-        else
-        {
-            throw cxxopts::option_required_exception("video");
-        }
+        if (result.count("videos") == result.count("observations"))
+            throw cxxopts::OptionParseException("specify exactly one of --videos or --observations");
 
-        if (result.count("calibration"))
-        {
-            calPath = result["calibration"].as<std::string>();
-        }
-        else
-        {
-            throw cxxopts::option_required_exception("calibration");
-        }
+        if (result.count("videos"))
+            videoDir = result["videos"].as<std::string>();
+
+        if (result.count("observations"))
+            observationsDir = result["observations"].as<std::string>();
+
+        if (result.count("dump-observations"))
+            dumpDir = result["dump-observations"].as<std::string>();
 
         if (result.count("solution"))
-        {
-            bOutputSolution = true;
-            outSolutionPath = result["output"].as<std::string>();
-        }
+            outSolutionPath = result["solution"].as<std::string>();
 
         if (result.count("output"))
-        {
             outJsonPath = result["output"].as<std::string>();
-        }
-        else
-        {
+        else if (videoDir.empty())
             throw cxxopts::option_required_exception("output");
-        }
 
+        if (result.count("calibration"))
+            calPath = result["calibration"].as<std::string>();
+        else if (!outJsonPath.empty())
+            throw cxxopts::option_required_exception("calibration");
     }
     catch (cxxopts::OptionException& e)
     {
-        printf(e.what());
-        printf("\n");
-        printf(options.help().c_str());
-
+        printf("%s\n\n%s", e.what(), options.help().c_str());
         return 1;
     }
 
     // Process
-    PointTracker tracker;
-    tracker.LoadBlobsFromJson(videoPath);
+    ObservationSet observationSet;
+    bool bLoaded = videoDir.empty() ? observationSet.LoadFromJson(observationsDir) : observationSet.LoadFromVideos(videoDir, dumpDir);
+    if (!bLoaded)
+    {
+        printf("Error: no observations loaded\n");
+        return 1;
+    }
 
-    BundleAdjuster bundleAdjuster(&tracker.m_observations);
+    if (outJsonPath.empty())
+        return 0;
+
+    BundleAdjuster bundleAdjuster(&observationSet.m_observations);
 
     if (!bundleAdjuster.LoadCameraCalibrationFromJson(calPath))
     {
@@ -99,16 +89,14 @@ int main(int argc, char** argv)
     bundleAdjuster.Reconstruct();
     bundleAdjuster.FindAlignmentTransform();
 
-    if (bOutputSolution)
+    if (!outSolutionPath.empty())
     {
         printf("Writing full solution to: %s\n", outSolutionPath.c_str());
-        bundleAdjuster.WriteSolutionToJson(outJsonPath);
+        bundleAdjuster.WriteSolutionToJson(outSolutionPath);
     }
 
     printf("Writing aligned point cloud to: %s\n", outJsonPath.c_str());
     bundleAdjuster.WriteAlignedReconstructionToJson(outJsonPath);
-
-    //bundleAdjuster.DrawReconstructionOnVideo(videoPath);
 
     return 0;
 }

@@ -6,8 +6,8 @@
 
 #include "ledobservationresidual.h"
 
-//#include "pointtracker.h"
-#include "jsontracker.h"
+#include "ledconstants.h"
+#include "observationset.h"
 
 #include "pointsvisualizer.h"
 
@@ -23,7 +23,7 @@ public:
 
 	// Initialize the bundle adjustment problem.
 	// This scans for a pair of frames where point motion cannot be explained by a homography,
-	// then initializes poses & map via Nister's five-point algorithm for essential matrix extraction.  
+	// then initializes poses & map via TwoFramePlanarInit.
 	bool InitializeBA();
 
 	// Attempt to reconstruct everything.  Runs the entire process.
@@ -36,10 +36,6 @@ public:
 
 	// Attempt to find a homography that explains image point correspondences between two frames.
 	bool TwoFrameHomography( int nFrame1, int nFrame2, cv::Mat& homography );
-
-	// Estimate the relative poses of two frames via Nister's five-point method + a RANSAC / cheirality check. 
-	// Also initializes locations of LEDs seen by this pair.  
-	bool TwoFrameEssentialMatInit(int nFrame1, int nFrame2, cv::Mat &cameraMat);
 
 	// Do a DSO-style initialization, where points are unprojected from frame 1, and the initial frame 1 -> frame 2 
 	// transform guess is identity. An immediate bundle adjustment over these 2 frames makes init proper. 
@@ -80,19 +76,12 @@ public:
 	// Output a file containing LED locations, after alignment.
 	bool WriteAlignedReconstructionToJson(const std::string& outPath);
 
-	bool DrawReconstructionOnVideo(std::string videoPath);
-
-	static constexpr int k_nMaxLeds = 215 * 32 * 2;
-
 	// Minimum number of map point observations required to initialize the pose of a new camera.
 	// Should be >= 4.  
 	static constexpr int k_nMinObservationsForPnPInit = 6;
 
 	// Attempt up to this many times to triangulate a point.
 	static constexpr int k_nMaxTriangulationRetries = 10;
-
-	// In TwoFrameEssentialMatInit(...), require that at least this fraction of points are inliers.
-	static constexpr float k_flMinEssentialMatInitInlierFrac = 0.75;
 
 	const std::vector< std::vector< PointObservation_t > >* m_pObservations;
 

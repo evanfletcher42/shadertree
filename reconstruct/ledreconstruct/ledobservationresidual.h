@@ -5,8 +5,7 @@
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
 
-//#include "pointtracker.h"
-#include "jsontracker.h"
+#include "observationset.h"
 
 
 // ceres-solver residual for the bundle adjustment problem

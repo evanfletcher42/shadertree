@@ -24,7 +24,10 @@
     <ClCompile Include="pointsvisualizer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="jsontracker.cpp">
+    <ClCompile Include="observationset.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="imagedecoder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,7 +38,13 @@
     <ClInclude Include="pointsvisualizer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="jsontracker.h">
+    <ClInclude Include="observationset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="imagedecoder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ledconstants.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ledobservationresidual.h">

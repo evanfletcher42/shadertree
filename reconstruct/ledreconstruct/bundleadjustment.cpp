@@ -91,13 +91,7 @@ bool BundleAdjuster::InitializeBA()
 
 	for (int i = 0; i < m_pObservations->size(); i++)
 	{
-		int nLabeledLeds = 0;
-
-		for (const PointObservation& obs : (*m_pObservations)[i])
-		{
-			if (obs.status == PointObservation::ObservationStatus::eLabeled)
-				nLabeledLeds++;
-		}
+		int nLabeledLeds = (int)(*m_pObservations)[i].size();
 
 		if (nLabeledLeds > nMaxObs)
 		{
@@ -121,10 +115,6 @@ bool BundleAdjuster::InitializeBA()
 			break;
 	}
 	
-	// Given that we have parallax, initialize camera poses and triangulate points via an essential-matrix decomposition.
-	//cv::Mat cameraMat = cv::Mat::eye(cv::Size(3, 3), CV_32FC1);
-	//TwoFrameEssentialMatInit(nFrame1, nFrame2, cameraMat);
-
 	// Do a DSO-style two frame init (where frame 1 points are unprojected to Z=1)
 	TwoFramePlanarInit(nFrame1, nFrame2);
 
@@ -252,14 +242,8 @@ bool BundleAdjuster::FindFrameCorrespondences(int nFrame1, int nFrame2,
 {
 	for (const PointObservation_t& obs1 : (*m_pObservations)[nFrame1])
 	{
-		if (obs1.status != PointObservation::ObservationStatus::eLabeled)
-			continue;
-
 		for (const PointObservation_t& obs2 : (*m_pObservations)[nFrame2])
 		{
-			if (obs2.status != PointObservation::ObservationStatus::eLabeled)
-				continue;
-
 			if (obs1.nLedIdx == obs2.nLedIdx)
 			{
 				frame1Points.push_back(obs1.p);
@@ -355,163 +339,6 @@ bool BundleAdjuster::TwoFrameHomography(int nFrame1, int nFrame2, cv::Mat &homog
 	}
 		
 	printf("TwoFrameHomography: Homography works (%d / %zu)\n", nInliers, frame1Pts.size());
-	return true;
-}
-
-bool BundleAdjuster::TwoFrameEssentialMatInit(int nFrame1, int nFrame2, cv::Mat &cameraMat)
-{
-#if 0
-	std::vector< cv::Point2f > frame1Pts;
-	std::vector< cv::Point2f > frame2Pts;
-
-	std::vector< const PointObservation_t* > frame1Obs;
-	std::vector< const PointObservation_t* > frame2Obs;
-
-	if (!FindFrameCorrespondences(nFrame1, nFrame2, frame1Obs, frame1Pts, frame2Obs, frame2Pts))
-		return false;
-
-	// Undistort points to normalized camera coordinates
-	cv::Mat normalizedCameraMat = cv::Mat::eye(3, 3, CV_32FC1);
-	std::vector< cv::Point2f > frame1PtsUndistorted;
-	std::vector< cv::Point2f > frame2PtsUndistorted;
-	cv::undistortPoints(frame1Pts, frame1PtsUndistorted, m_cameraMat, m_distCoefs);
-	cv::undistortPoints(frame2Pts, frame2PtsUndistorted, m_cameraMat, m_distCoefs);
-
-	// Nister's 5-point method requires... five points... but subsequent attempts to decompose the essential matrix can yield 
-	// multiple solutions.  A RANSAC approach over more-than-5 points will be used to find a unique solution.
-	if (frame1Pts.size() < 8)
-		return false;
-
-	std::vector<uint8_t> inlierMask(frame1Pts.size(), 1);
-
-	double k_flDesiredConfidence = 0.995;
-	double k_flRansacReprojThresholdPx = 2.5;
-
-	cv::Mat E;
-	try
-	{
-		E = cv::findEssentialMat(frame1PtsUndistorted, frame2PtsUndistorted, normalizedCameraMat, cv::RANSAC, k_flDesiredConfidence, k_flRansacReprojThresholdPx, inlierMask);
-	}
-	catch (cv::Exception& e)
-	{
-		printf("Exception in cv::findEssentialMat: %s\n", e.what());
-		return false;
-	}
-	// Maximum distance threshold for dropping infinite-distance points.
-	// Note: The essential matrix decomposition under the hood in recoverPose cannot estimate the scale of a translation; recoverPose
-	//		 will always return a unit vector.  As a consequence, all triangulated points have units of whatever-this-translation-was, 
-	//		 which may be a large-ish number in case of small-ish real translations.  
-	double k_flMaxDistance = 100.0;
-
-	cv::Mat frame2FromFrame1R;
-	cv::Mat frame2FromFrame1T;
-
-	// Triangulated points as a 4xN array (homogeneous coordinates).
-	cv::Mat pInFrame1;
-
-	int nRecoverPoseInliers = 0;
-	try
-	{
-		// The return value from cv::recoverPose() is undocumented, but a variable name in OpenCV's test_cameracalibration.cpp 
-		// suggests it is the number of inliers.  This seems accurate.
-		nRecoverPoseInliers = cv::recoverPose(E, frame1PtsUndistorted, frame2PtsUndistorted, normalizedCameraMat, frame2FromFrame1R, frame2FromFrame1T, k_flMaxDistance, inlierMask, pInFrame1);
-	}
-	catch (cv::Exception& e)
-	{
-		printf("Exception in cv::recoverPose: %s\n", e.what());
-		return false;
-	}
-
-	// Since we are using this to initialize the entire solve, we should succeed only if there are a large number of inliers
-	if (((float)nRecoverPoseInliers) / frame1Pts.size() < k_flMinEssentialMatInitInlierFrac)
-		return false;
-
-	// ============== Initialize parts of the problem as best we can ================
-	
-	// Set frame 1 camera pose (origin) 
-	m_cameraFromWorldPoses[nFrame1][0] = 0.0;
-	m_cameraFromWorldPoses[nFrame1][1] = 0.0;
-	m_cameraFromWorldPoses[nFrame1][2] = 0.0;
-	m_cameraFromWorldPoses[nFrame1][3] = 0.0;
-	m_cameraFromWorldPoses[nFrame1][4] = 0.0;
-	m_cameraFromWorldPoses[nFrame1][5] = 0.0;
-
-	// Mark this as the origin frame
-	m_nOriginFrameId = nFrame1;
-
-	/// Set frame 2 camera pose - use found transform
-	Eigen::Matrix<double, 3, 3> frame2FromFrame1REigen;
-	cv::cv2eigen(frame2FromFrame1R, frame2FromFrame1REigen);
-
-	ceres::RotationMatrixToAngleAxis(frame2FromFrame1REigen.data(), m_cameraFromWorldPoses[nFrame2].data());
-	m_cameraFromWorldPoses[nFrame2][3] = frame2FromFrame1T.at<double>(0);
-	m_cameraFromWorldPoses[nFrame2][4] = frame2FromFrame1T.at<double>(1);
-	m_cameraFromWorldPoses[nFrame2][5] = frame2FromFrame1T.at<double>(2);
-
-	// Set point locations for inliers
-	for (int i = 0; i < frame1Obs.size(); i++)
-	{
-		// Ignore outliers
-		if (!inlierMask[i])
-			continue;
-
-		int nLedIdx = frame1Obs[i]->nLedIdx;
-
-		m_ledPoints[nLedIdx][0] = pInFrame1.at<double>(0, i) / pInFrame1.at<double>(3, i);
-		m_ledPoints[nLedIdx][1] = pInFrame1.at<double>(1, i) / pInFrame1.at<double>(3, i);
-		m_ledPoints[nLedIdx][2] = pInFrame1.at<double>(2, i) / pInFrame1.at<double>(3, i);
-
-		m_pointsInitialized[nLedIdx] = true;
-	}
-
-	// Normalize map and camera scale.
-	// At this point, points and poses have been reconstructed up to a scale parameter; the transform between the two views is of
-	// unit length, and the point cloud is arbitrarily sized.
-	// For analytical convenience, rescale everything so that the largest LED coordinate is in the range [-1...1].  
-	// This serves no mathematical purpose other than to make it easier to plot things.  
-
-	double flMaxAbsX = 0.0;
-	double flMaxAbsY = 0.0;
-	double flMaxAbsZ = 0.0;
-
-	for (int i = 0; i < frame1Obs.size(); i++)
-	{
-		// Ignore outliers
-		if (!inlierMask[i])
-			continue;
-
-		flMaxAbsX = std::max(flMaxAbsX, std::abs(m_ledPoints[frame1Obs[i]->nLedIdx][0]));
-		flMaxAbsY = std::max(flMaxAbsY, std::abs(m_ledPoints[frame1Obs[i]->nLedIdx][1]));
-		flMaxAbsZ = std::max(flMaxAbsZ, std::abs(m_ledPoints[frame1Obs[i]->nLedIdx][2]));
-	}
-
-	double flMaxScale = std::max(flMaxAbsX, std::max(flMaxAbsY, flMaxAbsZ));
-
-	if (flMaxScale < 10*std::numeric_limits<double>::epsilon())
-	{
-		printf("TwoFrameEssentialMatInit: Error: Tiny max abs LED coordinate: %f.  This is probably not correct.\n", flMaxScale);
-		return false;
-	}
-
-	// Scale frame 2 translation (frame 1 is already at the origin)
-	m_cameraFromWorldPoses[nFrame2][3] /= flMaxScale;
-	m_cameraFromWorldPoses[nFrame2][4] /= flMaxScale;
-	m_cameraFromWorldPoses[nFrame2][5] /= flMaxScale;
-
-	// Scale LED points
-	for (int i = 0; i < frame1Obs.size(); i++)
-	{
-		// Ignore outliers
-		if (!inlierMask[i])
-			continue;
-
-		m_ledPoints[frame1Obs[i]->nLedIdx][0] /= flMaxScale;
-		m_ledPoints[frame1Obs[i]->nLedIdx][1] /= flMaxScale;
-		m_ledPoints[frame1Obs[i]->nLedIdx][2] /= flMaxScale;
-
-		printf("LED %d: %f %f %f\n", frame1Obs[i]->nLedIdx, m_ledPoints[frame1Obs[i]->nLedIdx][0], m_ledPoints[frame1Obs[i]->nLedIdx][1], m_ledPoints[frame1Obs[i]->nLedIdx][2]);
-	}
-#endif
 	return true;
 }
 
@@ -636,10 +463,6 @@ bool BundleAdjuster::InitCameraPosePnP(int nFrameIdx)
 	double pInCamera[3];
 	for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx])
 	{
-		// Does this point have a label?
-		if (obs.status != PointObservation::ObservationStatus::eLabeled)
-			continue;
-
 		// Is this a point in the current map?
 		if (!m_pointsInitialized[obs.nLedIdx])
 			continue;
@@ -704,10 +527,6 @@ int BundleAdjuster::TriangulateNewPoints()
 
 		for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx])
 		{
-			// Got a label?
-			if (obs.status != PointObservation::ObservationStatus::eLabeled)
-				continue;
-
 			// LED already initialized?
 			if (m_pointsInitialized[obs.nLedIdx])
 				continue;
@@ -868,9 +687,6 @@ bool BundleAdjuster::TestLedInFrontOfAllObservingCameras(int nLedIdx)
 
 		for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx])
 		{
-			if (obs.status != PointObservation::ObservationStatus::eLabeled)
-				continue;
-
 			if (obs.nLedIdx != nLedIdx)
 				continue;
 
@@ -910,9 +726,6 @@ int BundleAdjuster::CullInvalidPoints()
 
 		for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx] )
 		{
-			if (obs.status != PointObservation::ObservationStatus::eLabeled)
-				continue;
-
 			if (!m_pointsInitialized[obs.nLedIdx])
 				continue;
 
@@ -951,10 +764,6 @@ bool BundleAdjuster::SetupBundleAdjustmentProblem(ceres::Problem& problem, bool 
 
 		for (const PointObservation_t &obs : obsThisFrame)
 		{
-			// Labelled LEDs only
-			if (obs.status != PointObservation::ObservationStatus::eLabeled)
-				continue;
-
 			// Points with initializations only
 			if (!m_pointsInitialized[obs.nLedIdx])
 				continue;
@@ -1200,80 +1009,6 @@ bool BundleAdjuster::WriteAlignedReconstructionToJson(const std::string& outPath
 		return false;
 
 	writer->write(outJson, &ofs);
-
-	return true;
-}
-
-bool BundleAdjuster::DrawReconstructionOnVideo(std::string videoPath)
-{
-	cv::VideoCapture cap(videoPath);
-
-	if (!cap.isOpened())
-	{
-		return false;
-	}
-
-	cv::namedWindow("Video", cv::WindowFlags::WINDOW_AUTOSIZE);
-
-	int nFrameIdx = 0;
-	while (true)
-	{
-		cv::Mat img;
-		cap >> img;
-		if (img.empty())
-		{
-			break;
-		}
-
-		// Do we have a pose for this frame?
-		if (m_cameraFromWorldPoses.find(nFrameIdx) != m_cameraFromWorldPoses.end())
-		{
-			// Project all reconstructed points onto video
-			cv::Mat rvec = cv::Mat::zeros(cv::Size(1, 3), CV_64F);
-			cv::Mat tvec = cv::Mat::zeros(cv::Size(1, 3), CV_64F);
-
-			rvec.at<double>(0) = m_cameraFromWorldPoses[nFrameIdx][0];
-			rvec.at<double>(1) = m_cameraFromWorldPoses[nFrameIdx][1];
-			rvec.at<double>(2) = m_cameraFromWorldPoses[nFrameIdx][2];
-
-			tvec.at<double>(0) = m_cameraFromWorldPoses[nFrameIdx][3];
-			tvec.at<double>(1) = m_cameraFromWorldPoses[nFrameIdx][4];
-			tvec.at<double>(2) = m_cameraFromWorldPoses[nFrameIdx][5];
-
-			std::vector< cv::Point3d > points;
-			std::vector< int > labels;
-			for (int i = 0; i < k_nMaxLeds; i++)
-			{
-				if (!m_pointsInitialized[i])
-					continue;
-
-				cv::Point3d p;
-				p.x = m_ledPoints[i][0];
-				p.y = m_ledPoints[i][1];
-				p.z = m_ledPoints[i][2];
-
-				points.push_back(p);
-				labels.push_back(i);
-			}
-
-			std::vector< cv::Point2d > imgPoints;
-			cv::projectPoints(points, rvec, tvec, m_cameraMat, m_distCoefs, imgPoints);
-
-			// Draw a labelled circle on each point
-			for (int i = 0; i < points.size(); i++)
-			{
-				cv::circle(img, imgPoints[i], 25, cv::Scalar(0, 255, 0), 1, cv::LineTypes::LINE_AA);
-				cv::putText(img, std::to_string(labels[i]), imgPoints[i], cv::FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(0, 255, 0), 1, cv::LineTypes::LINE_AA);
-			}
-		}
-
-		cv::imshow("Video", img);
-
-		if (cv::waitKey(16) >= 0)
-			break;
-
-		nFrameIdx++;
-	}
 
 	return true;
 }

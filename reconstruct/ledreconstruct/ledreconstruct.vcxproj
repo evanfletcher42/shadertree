@@ -56,7 +56,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;_USE_MATH_DEFINES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)\thirdparty\eigen-3.4.0;$(SolutionDir)\thirdparty\ceres-solver-2.0.0\include;$(SolutionDir)\thirdparty\gflags-2.2.2\include;$(SolutionDir)\thirdparty\glog-0.5.0\include;$(SolutionDir)\thirdparty\opencv-4.5.4\include;$(SolutionDir)\thirdparty\cxxopts-3.0.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>Default</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -74,7 +74,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;_USE_MATH_DEFINES;OPENCV_DISABLE_EIGEN_TENSOR_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)\thirdparty\eigen-3.4.0;$(SolutionDir)\thirdparty\ceres-solver-2.0.0\include;$(SolutionDir)\thirdparty\gflags-2.2.2\include;$(SolutionDir)\thirdparty\glog-0.5.0\include;$(SolutionDir)\thirdparty\opencv-4.5.4\include;$(SolutionDir)\thirdparty\cxxopts-3.0.0\include;$(SolutionDir)\thirdparty\jsoncpp-1.9.5\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>Default</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -87,14 +87,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="bundleadjustment.cpp" />
-    <ClCompile Include="jsontracker.cpp" />
+    <ClCompile Include="imagedecoder.cpp" />
     <ClCompile Include="ledreconstruct.cpp" />
+    <ClCompile Include="observationset.cpp" />
     <ClCompile Include="pointsvisualizer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bundleadjustment.h" />
-    <ClInclude Include="jsontracker.h" />
+    <ClInclude Include="imagedecoder.h" />
+    <ClInclude Include="ledconstants.h" />
     <ClInclude Include="ledobservationresidual.h" />
+    <ClInclude Include="observationset.h" />
     <ClInclude Include="pointsvisualizer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

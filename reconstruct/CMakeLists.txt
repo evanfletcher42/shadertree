@@ -1,6 +1,9 @@
 cmake_minimum_required( VERSION 3.22 )
 project( ledreconstruct LANGUAGES CXX )
 
+# Must match how Ceres was built: Eigen's alignment depends on the SIMD flags.
+option( LEDRECONSTRUCT_AVX2 "Build with AVX2/FMA (Ceres must be built the same way)" OFF )
+
 find_package( Ceres 2.2 REQUIRED )
 find_package( Eigen3 REQUIRED NO_MODULE )
 find_package( OpenCV REQUIRED )
@@ -43,6 +46,14 @@ target_compile_definitions( ledreconstruct PRIVATE _USE_MATH_DEFINES OPENCV_DISA
 if ( MSVC )
 	target_compile_options( ledreconstruct PRIVATE /permissive- /sdl )
 	set_property( TARGET ledreconstruct PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON )
+endif()
+
+if ( LEDRECONSTRUCT_AVX2 )
+	if ( MSVC )
+		target_compile_options( ledreconstruct PRIVATE /arch:AVX2 )
+	else()
+		target_compile_options( ledreconstruct PRIVATE -mavx2 -mfma )
+	endif()
 endif()
 
 target_link_libraries( ledreconstruct PRIVATE

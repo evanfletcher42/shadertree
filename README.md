@@ -14,7 +14,7 @@ cmake --preset windows
 cmake --build --preset windows-release
 ```
 
-vcpkg builds the dependencies from `vcpkg.json` on the first configure (slow; cached afterwards). The executable and its DLLs end up in `build\windows\Release\`. You can also open `reconstruct\` as a folder in Visual Studio.
+vcpkg builds the dependencies from `vcpkg.json` on the first configure (slow; cached afterwards). The preset builds Ceres and the solver with AVX2, so the result needs an AVX2 CPU (Intel Haswell / AMD Excavator or newer). The executable and its DLLs end up in `build\windows\Release\`. You can also open `reconstruct\` as a folder in Visual Studio.
 
 ### Ubuntu 24.04
 

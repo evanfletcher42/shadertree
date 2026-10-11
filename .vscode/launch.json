@@ -1,0 +1,32 @@
+{
+	// Solve from cached observation JSONs. Paths are relative to the repo root; edit the prompt default to taste.
+	"version": "0.2.0",
+	"inputs": [
+		{
+			"id": "observations",
+			"type": "promptString",
+			"description": "Observation JSON directory",
+			"default": "../recon-baseline/cpp-real-decode"
+		}
+	],
+	"configurations": [
+		{
+			"name": "ledreconstruct (Windows)",
+			"type": "cppvsdbg",
+			"request": "launch",
+			"program": "${command:cmake.launchTargetPath}",
+			"args": [ "--observations", "${input:observations}", "--calibration", "reconstruct/ledreconstruct/calib.json", "--output", "reconstruct/build/points.json" ],
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "ledreconstruct (Linux)",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${command:cmake.launchTargetPath}",
+			"args": [ "--observations", "${input:observations}", "--calibration", "reconstruct/ledreconstruct/calib.json", "--output", "reconstruct/build/points.json" ],
+			"cwd": "${workspaceFolder}",
+			"MIMode": "gdb"
+		}
+	]
+}

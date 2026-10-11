@@ -16,6 +16,12 @@ cmake --build --preset windows-release
 
 vcpkg builds the dependencies from `vcpkg.json` on the first configure (slow; cached afterwards). The executable and its DLLs end up in `build\windows\Release\`. You can also open `reconstruct\` as a folder in Visual Studio.
 
+For a faster debuggable build use `cmake --build --preset windows-relwithdebinfo` (Debug works but the solve is very slow).
+
+### VS Code
+
+Open the repository root and install the recommended extensions (CMake Tools, C/C++). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging), then use the `ledreconstruct` launch configurations, which solve from a directory of cached observation JSONs. On Windows, `VCPKG_ROOT` must be set: start VS Code from a Developer PowerShell (`code .`), or set `VCPKG_ROOT` as a user environment variable pointing at Visual Studio's `VC\vcpkg` directory.
+
 ### Ubuntu 24.04
 
 ```

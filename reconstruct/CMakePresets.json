@@ -20,6 +20,7 @@
 	"buildPresets": [
 		{ "name": "windows-release", "configurePreset": "windows", "configuration": "Release" },
 		{ "name": "windows-debug", "configurePreset": "windows", "configuration": "Debug" },
+		{ "name": "windows-relwithdebinfo", "configurePreset": "windows", "configuration": "RelWithDebInfo" },
 		{ "name": "linux", "configurePreset": "linux" }
 	]
 }

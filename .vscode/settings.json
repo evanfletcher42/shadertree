@@ -1,0 +1,5 @@
+{
+	"cmake.sourceDirectory": "${workspaceFolder}/reconstruct",
+	"cmake.useCMakePresets": "always",
+	"C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+}

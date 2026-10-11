@@ -1090,6 +1090,10 @@ div#editorHeaderText
     margin-top: 20px;
     min-height: 1em; /* Ace won't render (and so never autosizes) a zero-height container */
 }
+div#editorHeaderText.ace-chrome
+{
+    background: linear-gradient(to right, #ebebeb var(--gutter-width, 0px), #ffffff 0);
+}
 
 
 a.tooltip

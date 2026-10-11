@@ -10,6 +10,7 @@
 
 #include "bundleadjustment.h"
 #include "observationset.h"
+#include "stagetimes.h"
 
 int main(int argc, char** argv)
 {
@@ -72,6 +73,7 @@ int main(int argc, char** argv)
     }
 
     // Process
+    StageClock_t::time_point loadStart = StageClock_t::now();
     ObservationSet observationSet;
     bool bLoaded = videoDir.empty() ? observationSet.LoadFromJson(observationsDir) : observationSet.LoadFromVideos(videoDir, dumpDir);
     if (!bLoaded)
@@ -79,6 +81,8 @@ int main(int argc, char** argv)
         printf("Error: no observations loaded\n");
         return 1;
     }
+
+    printf("Loaded observations in %.2f s\n", SecondsSince(loadStart));
 
     if (outJsonPath.empty())
         return 0;
@@ -94,8 +98,11 @@ int main(int argc, char** argv)
         return 1;
     };
 
+    StageClock_t::time_point reconstructStart = StageClock_t::now();
     if (!bundleAdjuster.Reconstruct())
         return 1;
+
+    printf("Reconstructed in %.2f s\n", SecondsSince(reconstructStart));
 
     bundleAdjuster.FindAlignmentTransform();
 

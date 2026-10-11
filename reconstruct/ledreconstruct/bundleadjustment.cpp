@@ -93,6 +93,7 @@ bool BundleAdjuster::InitializeBA()
 {
 	// Init from the pair of frames sharing the most LEDs whose motion a homography can't explain (parallax, so
 	// triangulation works).  Pairs are tried most-shared first; frame 1 (the origin) is the one with more LEDs.
+	StageClock_t::time_point pairSearchStart = StageClock_t::now();
 	int nFrames = (int)m_pObservations->size();
 	std::vector< std::array<int, 3> > pairs;  // shared LEDs, frame 1, frame 2
 	for (int i = 0; i < nFrames; i++)
@@ -132,6 +133,7 @@ bool BundleAdjuster::InitializeBA()
 		return false;
 	}
 
+	m_stageTimes.Add("init pair search", SecondsSince(pairSearchStart));
 	printf("Init with frames %d and %d\n", nFrame1, nFrame2);
 
 	// Do a DSO-style two frame init (where frame 1 points are unprojected to Z=1)
@@ -257,6 +259,7 @@ bool BundleAdjuster::Reconstruct()
 
 	printf("Reconstruct complete\n");
 	printf("Solution used %zu of %zu frames\n", m_cameraFromWorldPoses.size(), m_pObservations->size());
+	m_stageTimes.Print("Reconstruct");
 
 	return true;
 }
@@ -526,6 +529,8 @@ bool BundleAdjuster::InitCameraPosePnP(int nFrameIdx)
 
 int BundleAdjuster::InitializeNewCameras()
 {
+	CScopedStageTimer timer(&m_stageTimes, "pnp");
+
 	int nFramesAdded = 0;
 
 	// Attempt to initialize every camera frame that is not already in the map.
@@ -552,6 +557,8 @@ int BundleAdjuster::InitializeNewCameras()
 
 int BundleAdjuster::TriangulateNewPoints()
 {
+	CScopedStageTimer timer(&m_stageTimes, "triangulate");
+
 	// Posed frames observing each uninitialized LED, and where.
 	std::unordered_map<int, std::vector< int > > ledTrackedFrames;
 	std::unordered_map<int, std::vector< cv::Point2f> > ledPoints;
@@ -724,6 +731,8 @@ bool BundleAdjuster::TestLedInFrontOfAllObservingCameras(int nLedIdx)
 
 int BundleAdjuster::CullInvalidPoints()
 {
+	CScopedStageTimer timer(&m_stageTimes, "cull");
+
 	int nLedsRemoved = 0;
 
 	double pInCamera[3];
@@ -767,6 +776,8 @@ double BundleAdjuster::ComputeReprojectionError(const std::array<double, 6>& cam
 
 int BundleAdjuster::CullReprojectionOutliers()
 {
+	CScopedStageTimer timer(&m_stageTimes, "cull");
+
 	int nCamerasRemoved = 0;
 	for (auto it = m_cameraFromWorldPoses.begin(); it != m_cameraFromWorldPoses.end(); )
 	{
@@ -831,6 +842,8 @@ int BundleAdjuster::CullReprojectionOutliers()
 
 bool BundleAdjuster::SetupBundleAdjustmentProblem(ceres::Problem& problem, bool bSolveIntrinsics, bool bSolvePoses, bool bSolvePoints)
 {
+	CScopedStageTimer timer(&m_stageTimes, "problem setup");
+
 	if (m_nOriginFrameId < 0)
 	{
 		printf("SetupBundleAdjustmentProblem: Problem must be initialized first\n");
@@ -893,6 +906,8 @@ bool BundleAdjuster::SetupBundleAdjustmentProblem(ceres::Problem& problem, bool 
 
 bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 {
+	CScopedStageTimer timer(&m_stageTimes, "solve");
+
 	ceres::Solver::Options options;
 
 	// Parallel processing: Use a number of threads appropriate for the machine and the problem

@@ -10,6 +10,7 @@
 #include "observationset.h"
 
 #include "pointsvisualizer.h"
+#include "stagetimes.h"
 
 class BundleAdjuster
 {
@@ -135,6 +136,8 @@ private:
 
 	// Visualizations
 	CPointsVisualizer m_visualizer;
+
+	CStageTimes m_stageTimes;
 };
 
 class VisualizerCallback : public ceres::IterationCallback

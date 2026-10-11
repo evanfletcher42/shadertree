@@ -99,6 +99,7 @@
     <ClInclude Include="ledobservationresidual.h" />
     <ClInclude Include="observationset.h" />
     <ClInclude Include="pointsvisualizer.h" />
+    <ClInclude Include="stagetimes.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -8,6 +8,7 @@
 
 #include "imagedecoder.h"
 #include "ledconstants.h"
+#include "stagetimes.h"
 
 // Moving-sum width over per-frame mean intensity; also how far from either end a sync peak must be.
 static constexpr int k_nSyncWindowFrames = 5;
@@ -380,6 +381,7 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 {
 	std::string videoName = FileName( videoPath );
 
+	StageClock_t::time_point scanStart = StageClock_t::now();
 	std::vector< double > intensities;
 	double flFps = 0.0;
 	if ( !ReadFrameIntensities( &intensities, &flFps, videoPath ) )
@@ -396,6 +398,9 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 	if ( !FindSyncCycle( &nSyncStart, &nSyncEnd, peaks, flCycleFrames, videoName ) )
 		return false;
 
+	double flScanSeconds = SecondsSince( scanStart );
+
+	StageClock_t::time_point sampleStart = StageClock_t::now();
 	cv::Mat code;
 	cv::Mat known;
 	cv::Mat firstColor;
@@ -405,6 +410,9 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 		return false;
 	}
 
+	double flSampleSeconds = SecondsSince( sampleStart );
+
+	StageClock_t::time_point labelStart = StageClock_t::now();
 	cv::Mat labels( code.size(), CV_32SC1, cv::Scalar( -1 ) );
 	for ( int y = 0; y < code.rows; y++ )
 	{
@@ -425,7 +433,8 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 	int nDuplicateIdxs = 0;
 	FindBlobs( pObservations, &nDuplicateIdxs, &labels );
 
-	printf( "%s: %d LEDs (sync frames %d-%d, %d indices with duplicate blobs)\n",
-		videoName.c_str(), ( int )pObservations->size(), nSyncStart, nSyncEnd, nDuplicateIdxs );
+	printf( "%s: %d LEDs (sync frames %d-%d, %d indices with duplicate blobs; scan %d frames %.2f s, sample %.2f s, label %.2f s)\n",
+		videoName.c_str(), ( int )pObservations->size(), nSyncStart, nSyncEnd, nDuplicateIdxs, ( int )intensities.size(),
+		flScanSeconds, flSampleSeconds, SecondsSince( labelStart ) );
 	return true;
 }

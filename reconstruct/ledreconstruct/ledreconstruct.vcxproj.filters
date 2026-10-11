@@ -47,6 +47,9 @@
     <ClInclude Include="ledconstants.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="stagetimes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ledobservationresidual.h">
       <Filter>Header Files</Filter>
     </ClInclude>

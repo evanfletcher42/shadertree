@@ -25,7 +25,7 @@ SECRET_KEY = '\'"cReha8{n7QaKcVp=Pz]D^=l:!L&7*d)]^3?ywyL%fY=!Z7Q$J9!o$Zc7&cTxzx`
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['shadertree.valve.org', '127.0.0.1', 'localhost', '172.29.255.12', 'shadertree.local']
+ALLOWED_HOSTS = ['shadertree.valve.org', '127.0.0.1', 'localhost', '172.29.255.12', '192.168.1.217', 'shadertree.local']
 
 
 # Application definition

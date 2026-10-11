@@ -69,8 +69,48 @@ static double ExpectedCycleFrames( double flFps )
 }
 
 
-// Mean intensity of each frame, up to k_flMaxScanCycles cycles.
-static bool ReadFrameIntensities( std::vector< double > *pIntensities, double *pflFps, const std::string &videoPath )
+// Opponent-color argmax; ties resolve to the earlier of R, G, B.
+static uint8_t ClassifyColor( const uint8_t *pBgr )
+{
+	uint8_t b = pBgr[0];
+	uint8_t g = pBgr[1];
+	uint8_t r = pBgr[2];
+
+	if ( r >= g && r >= b )
+		return eRed;
+
+	return ( g >= b ) ? eGreen : eBlue;
+}
+
+
+// Per-pixel color classes of a frame, 2 bits each, 4 pixels per byte in row-major order.
+using ColorMap_t = std::vector< uint8_t >;
+
+static ColorMap_t ClassifyFrame( const cv::Mat &frame )
+{
+	ColorMap_t colors( ( frame.total() + 3 ) / 4, 0 );
+	size_t i = 0;
+	for ( int y = 0; y < frame.rows; y++ )
+	{
+		const uint8_t *pBgr = frame.ptr< uint8_t >( y );
+		for ( int x = 0; x < frame.cols; x++, i++ )
+		{
+			colors[i >> 2] |= ClassifyColor( pBgr + 3 * x ) << ( ( i & 3 ) * 2 );
+		}
+	}
+
+	return colors;
+}
+
+
+static uint8_t GetColor( const ColorMap_t &colors, size_t i )
+{
+	return ( colors[i >> 2] >> ( ( i & 3 ) * 2 ) ) & 3;
+}
+
+
+// One pass over up to k_flMaxScanCycles cycles: mean intensity (for sync) and color classes of every frame.
+static bool ScanVideo( std::vector< double > *pIntensities, std::vector< ColorMap_t > *pColorMaps, cv::Size *pFrameSize, double *pflFps, const std::string &videoPath )
 {
 	cv::VideoCapture cap( videoPath );
 	if ( !cap.isOpened() )
@@ -92,6 +132,8 @@ static bool ReadFrameIntensities( std::vector< double > *pIntensities, double *p
 	{
 		cv::Scalar mean = cv::mean( frame );
 		pIntensities->push_back( ( mean[0] + mean[1] + mean[2] ) / 3.0 );
+		pColorMaps->push_back( ClassifyFrame( frame ) );
+		*pFrameSize = frame.size();
 	}
 
 	*pflFps = flFps;
@@ -179,83 +221,49 @@ static bool FindSyncCycle( int *pnStart, int *pnEnd, const std::vector< int > &p
 }
 
 
-// Opponent-color argmax; ties resolve to the earlier of R, G, B.
-static uint8_t ClassifyColor( const uint8_t *pBgr )
-{
-	uint8_t b = pBgr[0];
-	uint8_t g = pBgr[1];
-	uint8_t r = pBgr[2];
-
-	if ( r >= g && r >= b )
-		return eRed;
-
-	return ( g >= b ) ? eGreen : eBlue;
-}
-
-
-// Classifies the color-slot centers of one cycle and accumulates per-pixel transition bits:
+// Accumulates per-pixel transition bits over the color-slot centers of one cycle:
 // R->G->B->R is a 1, the reverse a 0, no change an erasure (clears *pKnown).
-static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstColor, const std::string &videoPath, int nSyncStart, int nSyncEnd )
+static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstColor, const std::vector< ColorMap_t > &colorMaps, cv::Size frameSize, int nSyncStart, int nSyncEnd )
 {
 	double flSlotFrames = ( nSyncEnd - nSyncStart ) / ( double )k_nCycleSlots;
 
+	*pCode = cv::Mat::zeros( frameSize, CV_32SC1 );
+	*pKnown = cv::Mat::ones( frameSize, CV_8UC1 );
+	*pFirstColor = cv::Mat( frameSize, CV_8UC1 );
+
+	uint32_t *pCodes = pCode->ptr< uint32_t >();
+	uint8_t *pKnowns = pKnown->ptr< uint8_t >();
+	uint8_t *pFirsts = pFirstColor->ptr< uint8_t >();
+	size_t nPixels = frameSize.area();
+
 	// Sync peak is the boundary between the two sync slots, so color slot k is centered k + 1.5 slots later.
-	std::vector< int > sampleFrames;
+	const ColorMap_t *pPrevColors = nullptr;
 	for ( int k = 0; k < k_nColorSlots; k++ )
 	{
-		sampleFrames.push_back( ( int )( nSyncStart + flSlotFrames * ( k + 1.5 ) + 0.5 ) );
-	}
-
-	cv::VideoCapture cap( videoPath );
-	if ( !cap.isOpened() )
-		return false;
-
-	cv::Mat frame;
-	cv::Mat prevColor;
-	int nSample = 0;
-	for ( int nFrame = 0; nSample < k_nColorSlots; nFrame++ )
-	{
-		if ( !cap.read( frame ) )
+		size_t nFrame = ( size_t )( nSyncStart + flSlotFrames * ( k + 1.5 ) + 0.5 );
+		if ( nFrame >= colorMaps.size() )
 			return false;
 
-		if ( nFrame != sampleFrames[nSample] )
-			continue;
-
-		if ( nSample == 0 )
+		const ColorMap_t &colors = colorMaps[nFrame];
+		if ( !pPrevColors )
 		{
-			*pCode = cv::Mat::zeros( frame.size(), CV_32SC1 );
-			*pKnown = cv::Mat::ones( frame.size(), CV_8UC1 );
-			prevColor = cv::Mat( frame.size(), CV_8UC1 );
-		}
-
-		for ( int y = 0; y < frame.rows; y++ )
-		{
-			const uint8_t *pBgr = frame.ptr< uint8_t >( y );
-			uint32_t *pCodeRow = pCode->ptr< uint32_t >( y );
-			uint8_t *pKnownRow = pKnown->ptr< uint8_t >( y );
-			uint8_t *pPrevRow = prevColor.ptr< uint8_t >( y );
-
-			for ( int x = 0; x < frame.cols; x++ )
+			for ( size_t i = 0; i < nPixels; i++ )
 			{
-				uint8_t nColor = ClassifyColor( pBgr + 3 * x );
-
-				if ( nSample > 0 )
-				{
-					int nStep = ( nColor - pPrevRow[x] + 3 ) % 3;
-					pKnownRow[x] &= ( nStep != 0 );
-					pCodeRow[x] = ( pCodeRow[x] << 1 ) | ( nStep == 1 );
-				}
-
-				pPrevRow[x] = nColor;
+				pFirsts[i] = GetColor( colors, i );
 			}
+
+			pPrevColors = &colors;
+			continue;
 		}
 
-		if ( nSample == 0 )
+		for ( size_t i = 0; i < nPixels; i++ )
 		{
-			prevColor.copyTo( *pFirstColor );
+			int nStep = ( GetColor( colors, i ) - GetColor( *pPrevColors, i ) + 3 ) % 3;
+			pKnowns[i] &= ( nStep != 0 );
+			pCodes[i] = ( pCodes[i] << 1 ) | ( nStep == 1 );
 		}
 
-		nSample++;
+		pPrevColors = &colors;
 	}
 
 	return true;
@@ -383,8 +391,10 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 
 	StageClock_t::time_point scanStart = StageClock_t::now();
 	std::vector< double > intensities;
+	std::vector< ColorMap_t > colorMaps;
+	cv::Size frameSize;
 	double flFps = 0.0;
-	if ( !ReadFrameIntensities( &intensities, &flFps, videoPath ) )
+	if ( !ScanVideo( &intensities, &colorMaps, &frameSize, &flFps, videoPath ) )
 	{
 		printf( "%s: can't open video\n", videoName.c_str() );
 		return false;
@@ -400,19 +410,18 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 
 	double flScanSeconds = SecondsSince( scanStart );
 
-	StageClock_t::time_point sampleStart = StageClock_t::now();
+	StageClock_t::time_point labelStart = StageClock_t::now();
 	cv::Mat code;
 	cv::Mat known;
 	cv::Mat firstColor;
-	if ( !AccumulateCodes( &code, &known, &firstColor, videoPath, nSyncStart, nSyncEnd ) )
+	if ( !AccumulateCodes( &code, &known, &firstColor, colorMaps, frameSize, nSyncStart, nSyncEnd ) )
 	{
 		printf( "%s: video ended inside the code cycle\n", videoName.c_str() );
 		return false;
 	}
 
-	double flSampleSeconds = SecondsSince( sampleStart );
+	colorMaps.clear();
 
-	StageClock_t::time_point labelStart = StageClock_t::now();
 	cv::Mat labels( code.size(), CV_32SC1, cv::Scalar( -1 ) );
 	for ( int y = 0; y < code.rows; y++ )
 	{
@@ -433,8 +442,8 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 	int nDuplicateIdxs = 0;
 	FindBlobs( pObservations, &nDuplicateIdxs, &labels );
 
-	printf( "%s: %d LEDs (sync frames %d-%d, %d indices with duplicate blobs; scan %d frames %.2f s, sample %.2f s, label %.2f s)\n",
+	printf( "%s: %d LEDs (sync frames %d-%d, %d indices with duplicate blobs; scan %d frames %.2f s, label %.2f s)\n",
 		videoName.c_str(), ( int )pObservations->size(), nSyncStart, nSyncEnd, nDuplicateIdxs, ( int )intensities.size(),
-		flScanSeconds, flSampleSeconds, SecondsSince( labelStart ) );
+		flScanSeconds, SecondsSince( labelStart ) );
 	return true;
 }

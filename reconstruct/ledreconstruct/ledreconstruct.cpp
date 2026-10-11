@@ -15,6 +15,9 @@ int main(int argc, char** argv)
 {
     google::InitGoogleLogging(argv[0]);
 
+    // Unbuffered, so redirected logs keep their tail and stay in order with Ceres' output
+    setvbuf(stdout, nullptr, _IONBF, 0);
+
     // Command line options
     cxxopts::Options options("ledreconstruct", "Reconstruct 3D locations of LEDs on an addressible light string.");
     options.add_options()

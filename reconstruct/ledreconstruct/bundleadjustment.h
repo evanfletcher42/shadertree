@@ -86,6 +86,11 @@ public:
 	// Output a file containing LED locations, after alignment.
 	bool WriteAlignedReconstructionToJson(const std::string& outPath);
 
+	// Output site coordinates (stweb LedCoordsCfg): Y up with the tree's wide end at the bottom (bFlip inverts that
+	// choice), y in [-1, 1], centered on the tree's axis.  Writes <basePath>.ledcoords.json (flat x,y,z per address,
+	// unmapped = 0,0,0; paste into admin) and <basePath>.leds.json ([{addr, x, y, z}] for mapped LEDs).
+	bool WriteSiteCoordinatesToJson(const std::string& basePath, bool bFlip);
+
 	// The init pair must share at least this many LEDs.
 	static constexpr int k_nMinInitSharedLeds = 100;
 
@@ -120,6 +125,8 @@ public:
 
 private:
 	static void composeRT(double* pose, cv::Mat& poseRT);
+
+	void ComputeAlignedPoint(double* pAligned, int nLedIdx) const;
 
 	// The frame ID which defines the origin.
 	int m_nOriginFrameId;

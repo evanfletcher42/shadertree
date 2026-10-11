@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cfloat>
 #include <fstream>
 #include <limits>
 
@@ -1070,11 +1071,7 @@ bool BundleAdjuster::WriteAlignedReconstructionToJson(const std::string& outPath
 
 	for (int i = 0; i < k_nMaxLeds; i++)
 	{
-		// Apply alignment transform
-		ceres::AngleAxisRotatePoint(m_alignedFromWorld, m_ledPoints[i], pAligned);
-		pAligned[0] += m_alignedFromWorld[3];
-		pAligned[1] += m_alignedFromWorld[4];
-		pAligned[2] += m_alignedFromWorld[5];
+		ComputeAlignedPoint(pAligned, i);
 
 		Json::Value ledEntry(Json::arrayValue);
 
@@ -1107,6 +1104,116 @@ bool BundleAdjuster::WriteAlignedReconstructionToJson(const std::string& outPath
 	writer->write(outJson, &ofs);
 
 	return true;
+}
+
+void BundleAdjuster::ComputeAlignedPoint(double* pAligned, int nLedIdx) const
+{
+	ceres::AngleAxisRotatePoint(m_alignedFromWorld, m_ledPoints[nLedIdx], pAligned);
+	pAligned[0] += m_alignedFromWorld[3];
+	pAligned[1] += m_alignedFromWorld[4];
+	pAligned[2] += m_alignedFromWorld[5];
+}
+
+static bool WriteJson(const std::string& path, const Json::Value& value)
+{
+	std::ofstream ofs(path);
+	if (!ofs)
+	{
+		printf("Error: can't write %s\n", path.c_str());
+		return false;
+	}
+
+	Json::StreamWriterBuilder builder;
+	builder["indentation"] = "";
+	builder["precision"] = 6;
+	std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+	writer->write(value, &ofs);
+	return true;
+}
+
+bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, bool bFlip)
+{
+	std::vector<int> leds;
+	std::vector<std::array<double, 3>> points;
+	for (int i = 0; i < k_nMaxLeds; i++)
+	{
+		if (!m_pointsInitialized[i])
+			continue;
+
+		std::array<double, 3> p;
+		ComputeAlignedPoint(p.data(), i);
+		leds.push_back(i);
+		points.push_back(p);
+	}
+
+	if (points.empty())
+		return false;
+
+	// The alignment puts the tree's axis on Z.  It's a cone, so the half nearer its wide end has the larger median radius.
+	std::vector<double> heights;
+	for (const std::array<double, 3>& p : points)
+	{
+		heights.push_back(p[2]);
+	}
+	double flMidHeight = Median(heights);
+
+	std::vector<double> lowRadii;
+	std::vector<double> highRadii;
+	for (const std::array<double, 3>& p : points)
+	{
+		std::vector<double>& radii = (p[2] < flMidHeight) ? lowRadii : highRadii;
+		radii.push_back(std::hypot(p[0], p[1]));
+	}
+
+	bool bZUp = lowRadii.empty() || highRadii.empty() || Median(lowRadii) > Median(highRadii);
+	if (bFlip)
+		bZUp = !bZUp;
+
+	// Z up -> Y up: (x, y, z) -> (x, z, -y).  Upside down first rotates 180 degrees about X: (x, -z, y).
+	double flSign = bZUp ? 1.0 : -1.0;
+	double flMinY = DBL_MAX;
+	double flMaxY = -DBL_MAX;
+	for (std::array<double, 3>& p : points)
+	{
+		p = { p[0], flSign * p[2], -flSign * p[1] };
+		flMinY = std::min(flMinY, p[1]);
+		flMaxY = std::max(flMaxY, p[1]);
+	}
+
+	double flScale = 2.0 / std::max(flMaxY - flMinY, 1e-9);
+	double flOffsetY = -1.0 - flMinY * flScale;
+
+	Json::Value flat(Json::arrayValue);
+	flat.resize(3 * k_nMaxLeds);
+	for (Json::ArrayIndex i = 0; i < flat.size(); i++)
+	{
+		flat[i] = 0.0;
+	}
+
+	Json::Value list(Json::arrayValue);
+	for (size_t i = 0; i < points.size(); i++)
+	{
+		double flX = points[i][0] * flScale;
+		double flY = points[i][1] * flScale + flOffsetY;
+		double flZ = points[i][2] * flScale;
+
+		flat[3 * leds[i]] = flX;
+		flat[3 * leds[i] + 1] = flY;
+		flat[3 * leds[i] + 2] = flZ;
+
+		Json::Value led(Json::objectValue);
+		led["addr"] = leds[i];
+		led["x"] = flX;
+		led["y"] = flY;
+		led["z"] = flZ;
+		list.append(led);
+	}
+
+	printf("Site coordinates: %zu LEDs, %s up (median radius below / above mid-height %.3f / %.3f%s), scale %.3f\n",
+		points.size(), bZUp ? "+Z" : "-Z", lowRadii.empty() ? 0.0 : Median(lowRadii), highRadii.empty() ? 0.0 : Median(highRadii),
+		bFlip ? ", flipped by --flip" : "", flScale);
+
+	return WriteJson(basePath + ".ledcoords.json", flat) && WriteJson(basePath + ".leds.json", list);
 }
 
 void BundleAdjuster::composeRT(double* pose, cv::Mat& poseRT)

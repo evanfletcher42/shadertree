@@ -25,6 +25,8 @@ int main(int argc, char** argv)
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
         ("s,solution", "Output unaligned solution JSON path (optional)", cxxopts::value<std::string>())
         ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>())
+        ("site", "Also write site coordinates: <path>.ledcoords.json (paste into admin LedCoordsCfg) and <path>.leds.json", cxxopts::value<std::string>())
+        ("flip", "Flip the automatically chosen up direction of the site coordinates")
         ("threads", "Solver threads (default: one per core; 1 makes runs bit-reproducible)", cxxopts::value<int>()->default_value("0"));
 
     std::string videoDir;
@@ -34,6 +36,8 @@ int main(int argc, char** argv)
     std::string outSolutionPath;
     std::string outJsonPath;
     int nThreads = 0;
+    std::string sitePath;
+    bool bFlip = false;
 
     try
     {
@@ -60,6 +64,10 @@ int main(int argc, char** argv)
             throw cxxopts::option_required_exception("output");
 
         nThreads = result["threads"].as<int>();
+        bFlip = result.count("flip") > 0;
+
+        if (result.count("site"))
+            sitePath = result["site"].as<std::string>();
 
         if (result.count("calibration"))
             calPath = result["calibration"].as<std::string>();
@@ -114,6 +122,12 @@ int main(int argc, char** argv)
 
     printf("Writing aligned point cloud to: %s\n", outJsonPath.c_str());
     bundleAdjuster.WriteAlignedReconstructionToJson(outJsonPath);
+
+    if (!sitePath.empty())
+    {
+        printf("Writing site coordinates to: %s.ledcoords.json, %s.leds.json\n", sitePath.c_str(), sitePath.c_str());
+        bundleAdjuster.WriteSiteCoordinatesToJson(sitePath, bFlip);
+    }
 
     // Redirected short runs lost their last lines without this
     fflush(stdout);

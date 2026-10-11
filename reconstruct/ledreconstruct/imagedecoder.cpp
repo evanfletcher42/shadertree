@@ -21,8 +21,11 @@ static constexpr double k_flSyncPeakSeparationFrac = 0.4;
 // A pair of sync peaks bounds a usable cycle if its gap is within this fraction of the median gap.
 static constexpr double k_flSyncGapTolerance = 0.05;
 
-// Warn if the container fps or the measured cycle length is off by more than this fraction.
-static constexpr double k_flTimingTolerance = 0.01;
+// Warn if the container fps is off by more than this fraction.
+static constexpr double k_flFpsTolerance = 0.01;
+
+// Warn if the measured cycle length is off by more than this; peaks are whole frames, so +-1 is rounding.
+static constexpr double k_flCycleToleranceFrames = 1.5;
 
 // Only scan this many cycles' worth of frames for sync.
 static constexpr int k_nMaxScanCycles = 4;
@@ -73,7 +76,7 @@ static bool ReadFrameIntensities( std::vector< double > *pIntensities, double *p
 		return false;
 
 	double flFps = cap.get( cv::CAP_PROP_FPS );
-	if ( fabs( flFps - k_flCaptureFps ) > k_flTimingTolerance * k_flCaptureFps )
+	if ( fabs( flFps - k_flCaptureFps ) > k_flFpsTolerance * k_flCaptureFps )
 	{
 		printf( "%s: warning: video is %.3f fps, ledcodes.glsl assumes %.2f\n", FileName( videoPath ).c_str(), flFps, k_flCaptureFps );
 	}
@@ -155,7 +158,7 @@ static bool FindSyncCycle( int *pnStart, int *pnEnd, const std::vector< int > &p
 	}
 
 	double flMedianGap = Median( gaps );
-	if ( fabs( flMedianGap - flCycleFrames ) > k_flTimingTolerance * flCycleFrames )
+	if ( fabs( flMedianGap - flCycleFrames ) > k_flCycleToleranceFrames )
 	{
 		printf( "%s: warning: sync cycle is %.1f frames, expected %.1f\n", videoName.c_str(), flMedianGap, flCycleFrames );
 	}

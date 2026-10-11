@@ -187,15 +187,7 @@ bool BundleAdjuster::Reconstruct()
 		SetupBundleAdjustmentProblem(problem1, false, true, false);
 		SolveProblem(problem1);
 
-		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
-
-		printf("Solving poses + points for new viewpoints...\n");
-		m_visualizer.SetTitle("Solving points and poses (new viewpoints)...");
-
-		ceres::Problem problem2;
-		SetupBundleAdjustmentProblem(problem2, false, true, true);
-		SolveProblem(problem2);
-
+		// Points are refined after triangulation, together with these poses.
 		CullReprojectionOutliers();
 
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);

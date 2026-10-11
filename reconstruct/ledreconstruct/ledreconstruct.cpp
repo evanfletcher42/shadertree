@@ -24,7 +24,6 @@ int main(int argc, char** argv)
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
         ("s,solution", "Output unaligned solution JSON path (optional)", cxxopts::value<std::string>())
         ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>())
-        ("seed", "Random seed for triangulation pair choice", cxxopts::value<uint32_t>()->default_value("0"))
         ("threads", "Solver threads (default: one per core; 1 makes runs bit-reproducible)", cxxopts::value<int>()->default_value("0"));
 
     std::string videoDir;
@@ -34,7 +33,6 @@ int main(int argc, char** argv)
     std::string outSolutionPath;
     std::string outJsonPath;
     int nThreads = 0;
-    uint32_t nSeed = 0;
 
     try
     {
@@ -61,7 +59,6 @@ int main(int argc, char** argv)
             throw cxxopts::option_required_exception("output");
 
         nThreads = result["threads"].as<int>();
-        nSeed = result["seed"].as<uint32_t>();
 
         if (result.count("calibration"))
             calPath = result["calibration"].as<std::string>();
@@ -87,7 +84,7 @@ int main(int argc, char** argv)
         return 0;
 
     // Big: keep it off the stack
-    std::unique_ptr<BundleAdjuster> pBundleAdjuster = std::make_unique<BundleAdjuster>(&observationSet.m_observations, nSeed);
+    std::unique_ptr<BundleAdjuster> pBundleAdjuster = std::make_unique<BundleAdjuster>(&observationSet.m_observations);
     BundleAdjuster& bundleAdjuster = *pBundleAdjuster;
     bundleAdjuster.m_nThreads = nThreads;
 

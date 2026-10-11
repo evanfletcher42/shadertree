@@ -18,9 +18,8 @@ static double Median(std::vector<double> values)
 	return values[values.size() / 2];
 }
 
-BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pObservations, uint32_t nSeed)
+BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pObservations)
 	: m_pObservations(pObservations)
-	, m_gen(nSeed)
 {
 	// No points are initialized (yet)
 	memset(m_ledPoints, 0, sizeof(m_ledPoints));
@@ -554,16 +553,8 @@ int BundleAdjuster::InitializeNewCameras()
 
 int BundleAdjuster::TriangulateNewPoints()
 {
-	// TBD: This initializes new points using 2 frames.  New points are probably visible in more than 2 frames. 
-	//		Using all of them (i.e. DLT over all viewpoints) would probably yield a better initialization.
-	//		That said, it may not be worth the expense - the BA solve right after triangulation does much the same
-	//		thing as a more-optimal initialization would.
-	
-	// All tracked frames where a given untracked LED is observed.
-	// Addressing: ledTrackedFrames[nLedIdx] -> vector of frames where LED is tracked
+	// Posed frames observing each uninitialized LED, and where.
 	std::unordered_map<int, std::vector< int > > ledTrackedFrames;
-
-	// Locations of each LED in each tracked frame.
 	std::unordered_map<int, std::vector< cv::Point2f> > ledPoints;
 
 	for (auto& kv : m_cameraFromWorldPoses)
@@ -572,7 +563,6 @@ int BundleAdjuster::TriangulateNewPoints()
 
 		for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx])
 		{
-			// LED already initialized?
 			if (m_pointsInitialized[obs.nLedIdx])
 				continue;
 
@@ -588,69 +578,43 @@ int BundleAdjuster::TriangulateNewPoints()
 		const int nLedIdx = kv.first;
 		const std::vector<int>& frames = kv.second;
 
-		// Two observations required
 		if (frames.size() < 2)
 			continue;
 
-		std::uniform_int_distribution<int> d1(0, (int)frames.size() - 1);
-		std::uniform_int_distribution<int> d2(0, (int)frames.size() - 2);
+		// Linear (DLT) triangulation over every observing frame, in normalized camera coordinates.
+		std::vector<cv::Point2f> pUndistorted;
+		cv::undistortPoints(ledPoints[nLedIdx], pUndistorted, m_cameraMat, m_distCoefs);
 
-		// Choose random pairs & attempt triangulation up to a few times.
-		for (int nRetries = 0; nRetries < k_nMaxTriangulationRetries; nRetries++)
+		cv::Mat A((int)frames.size() * 2, 4, CV_64F);
+		for (int i = 0; i < (int)frames.size(); i++)
 		{
-			// Choose a random pair of frames
-			int i1 = d1(m_gen);
-			int i2 = d2(m_gen);
-			if (i2 >= i1)
-				i2++;
+			cv::Mat camFromWorld;
+			composeRT(m_cameraFromWorldPoses[frames[i]].data(), camFromWorld);
+			camFromWorld.convertTo(camFromWorld, CV_64F);
 
-			int nFrame1 = frames[i1];
-			int nFrame2 = frames[i2];
-
-			// Points are undistorted to normalized coordinates, so the projection matrices are [R|t] without K.
-			cv::Mat camFromWorld1;
-			composeRT(m_cameraFromWorldPoses[nFrame1].data(), camFromWorld1);
-
-			cv::Mat camFromWorld2;
-			composeRT(m_cameraFromWorldPoses[nFrame2].data(), camFromWorld2);
-
-			// Undistort both observations of this LED.
-			std::vector<cv::Point2f> pDistorted1;
-			std::vector<cv::Point2f> pDistorted2;
-
-			pDistorted1.push_back(ledPoints[nLedIdx][i1]);
-			pDistorted2.push_back(ledPoints[nLedIdx][i2]);
-
-			std::vector<cv::Point2f> pUndistorted1;
-			std::vector<cv::Point2f> pUndistorted2;
-
-			cv::undistortPoints(pDistorted1, pUndistorted1, m_cameraMat, m_distCoefs);
-			cv::undistortPoints(pDistorted2, pUndistorted2, m_cameraMat, m_distCoefs);
-
-			cv::Mat pInWorldHomogenous;
-
-			cv::triangulatePoints(camFromWorld1, camFromWorld2, pUndistorted1, pUndistorted2, pInWorldHomogenous);
-
-			// Initialize point
-			m_ledPoints[nLedIdx][0] = pInWorldHomogenous.at<float>(0) / pInWorldHomogenous.at<float>(3);
-			m_ledPoints[nLedIdx][1] = pInWorldHomogenous.at<float>(1) / pInWorldHomogenous.at<float>(3);
-			m_ledPoints[nLedIdx][2] = pInWorldHomogenous.at<float>(2) / pInWorldHomogenous.at<float>(3);
-
-			//printf("Triangulated LED %d: %f, %f, %f\n", nLedIdx, m_ledPoints[nLedIdx][0], m_ledPoints[nLedIdx][1], m_ledPoints[nLedIdx][2]);
-
-			m_pointsInitialized[nLedIdx] = true;
-
-			// Confirm point is reasonable.  If it's not, roll a new pair of frames and try again.
-			if (!TestLedInFrontOfAllObservingCameras(nLedIdx))
-			{
-				m_pointsInitialized[nLedIdx] = false;
-				continue;
-			}
-			nPointsTriangulated++;
-
-			// stop retrying pairs of frames, it worked
-			break;
+			cv::Mat(pUndistorted[i].x * camFromWorld.row(2) - camFromWorld.row(0)).copyTo(A.row(2 * i));
+			cv::Mat(pUndistorted[i].y * camFromWorld.row(2) - camFromWorld.row(1)).copyTo(A.row(2 * i + 1));
 		}
+
+		cv::Mat pInWorldHomogenous;
+		cv::SVD::solveZ(A, pInWorldHomogenous);
+
+		double flW = pInWorldHomogenous.at<double>(3);
+		if (fabs(flW) < 1e-12)
+			continue;
+
+		m_ledPoints[nLedIdx][0] = pInWorldHomogenous.at<double>(0) / flW;
+		m_ledPoints[nLedIdx][1] = pInWorldHomogenous.at<double>(1) / flW;
+		m_ledPoints[nLedIdx][2] = pInWorldHomogenous.at<double>(2) / flW;
+		m_pointsInitialized[nLedIdx] = true;
+
+		if (!TestLedInFrontOfAllObservingCameras(nLedIdx))
+		{
+			m_pointsInitialized[nLedIdx] = false;
+			continue;
+		}
+
+		nPointsTriangulated++;
 	}
 
 	return nPointsTriangulated;

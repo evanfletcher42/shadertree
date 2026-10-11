@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ceres/ceres.h>
-#include <random>
 #include <unordered_set>
 #include <string>
 
@@ -15,7 +14,7 @@
 class BundleAdjuster
 {
 public:
-	BundleAdjuster( std::vector< std::vector< PointObservation_t > > *pObservations, uint32_t nSeed );
+	BundleAdjuster( std::vector< std::vector< PointObservation_t > > *pObservations );
 
 	~BundleAdjuster();
 
@@ -48,7 +47,7 @@ public:
 	// Returns the number of new cameras initialized.  
 	int InitializeNewCameras();
 
-	// Attempt to initialize new points that are visible in 2+ frames in the current map.
+	// Initialize uninitialized LEDs seen by 2+ posed frames, by DLT over all of them.
 	int TriangulateNewPoints();
 
 	// Initialize points by linearally interpolating their positions between other points.  
@@ -96,9 +95,6 @@ public:
 	// Reprojection error above which an observation (or a camera's median) is an outlier.
 	static constexpr double k_flMaxReprojectionErrorPx = 10.0;
 
-	// Attempt up to this many times to triangulate a point.
-	static constexpr int k_nMaxTriangulationRetries = 10;
-
 	// Sorted by LED index within each frame.  Outlier observations are erased from these.
 	std::vector< std::vector< PointObservation_t > >* m_pObservations;
 
@@ -133,8 +129,6 @@ private:
 	cv::Mat m_distCoefs;
 	double m_intrinsics[LedObservationResidual::nIntrinsicsTraits];
 
-	// RNG
-	std::mt19937 m_gen;
 
 	// Visualizations
 	CPointsVisualizer m_visualizer;

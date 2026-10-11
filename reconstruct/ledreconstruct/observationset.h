@@ -29,6 +29,6 @@ public:
 	// Load observation JSONs (one view per file), as written by LoadFromVideos.
 	bool LoadFromJson( const std::string &jsonDir );
 
-	// Index like: m_observations[ nFrameIdx ][ nObservationIdxInThisFrame ]
+	// Index like: m_observations[ nFrameIdx ][ nObservationIdxInThisFrame ], sorted by nLedIdx within each frame
 	std::vector< std::vector< PointObservation_t > > m_observations;
 };

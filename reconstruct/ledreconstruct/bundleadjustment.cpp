@@ -271,21 +271,37 @@ bool BundleAdjuster::FindFrameCorrespondences(int nFrame1, int nFrame2,
 	std::vector< const PointObservation_t* > &frame1Obs, std::vector<cv::Point2f>& frame1Points, 
 	std::vector< const PointObservation_t* > &frame2Obs, std::vector<cv::Point2f>& frame2Points)
 {
-	for (const PointObservation_t& obs1 : (*m_pObservations)[nFrame1])
+	// Both lists are sorted by LED index: merge them.
+	const std::vector<PointObservation_t>& observations1 = (*m_pObservations)[nFrame1];
+	const std::vector<PointObservation_t>& observations2 = (*m_pObservations)[nFrame2];
+
+	size_t i1 = 0;
+	size_t i2 = 0;
+	while (i1 < observations1.size() && i2 < observations2.size())
 	{
-		for (const PointObservation_t& obs2 : (*m_pObservations)[nFrame2])
+		const PointObservation_t& obs1 = observations1[i1];
+		const PointObservation_t& obs2 = observations2[i2];
+
+		if (obs1.nLedIdx < obs2.nLedIdx)
 		{
-			if (obs1.nLedIdx == obs2.nLedIdx)
-			{
-				frame1Points.push_back(obs1.p);
-				frame2Points.push_back(obs2.p);
-
-				frame1Obs.push_back(&obs1);
-				frame2Obs.push_back(&obs2);
-
-				break;
-			}
+			i1++;
+			continue;
 		}
+
+		if (obs2.nLedIdx < obs1.nLedIdx)
+		{
+			i2++;
+			continue;
+		}
+
+		frame1Points.push_back(obs1.p);
+		frame2Points.push_back(obs2.p);
+
+		frame1Obs.push_back(&obs1);
+		frame2Obs.push_back(&obs2);
+
+		i1++;
+		i2++;
 	}
 
 	return true;
@@ -703,6 +719,15 @@ int BundleAdjuster::InterpolateNewPoints()
 	return nNewPoints;
 }
 
+const PointObservation_t* BundleAdjuster::FindObservation(int nFrameIdx, int nLedIdx) const
+{
+	const std::vector<PointObservation_t>& observations = (*m_pObservations)[nFrameIdx];
+	std::vector<PointObservation_t>::const_iterator it = std::lower_bound(observations.begin(), observations.end(), nLedIdx,
+		[](const PointObservation_t& obs, int nIdx) { return obs.nLedIdx < nIdx; });
+
+	return (it != observations.end() && it->nLedIdx == nLedIdx) ? &*it : nullptr;
+}
+
 bool BundleAdjuster::TestLedInFrontOfAllObservingCameras(int nLedIdx)
 {
 	if (!m_pointsInitialized[nLedIdx])
@@ -718,26 +743,18 @@ bool BundleAdjuster::TestLedInFrontOfAllObservingCameras(int nLedIdx)
 		int nFrameIdx = kv.first;
 		std::array<double, 6>& cameraFromWorld = kv.second;
 
-		for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx])
-		{
-			if (obs.nLedIdx != nLedIdx)
-				continue;
+		if (!FindObservation(nFrameIdx, nLedIdx))
+			continue;
 
-			// Found the LED
-			bLedObserved = true;
+		bLedObserved = true;
 
-			ceres::AngleAxisRotatePoint(cameraFromWorld.data(), pInWorld, pInCamera);
-			pInCamera[0] += cameraFromWorld[3];
-			pInCamera[1] += cameraFromWorld[4];
-			pInCamera[2] += cameraFromWorld[5];
+		ceres::AngleAxisRotatePoint(cameraFromWorld.data(), pInWorld, pInCamera);
+		pInCamera[0] += cameraFromWorld[3];
+		pInCamera[1] += cameraFromWorld[4];
+		pInCamera[2] += cameraFromWorld[5];
 
-			if (pInCamera[2] <= 0)
-			{
-				return false;
-			}
-
-			break;
-		}
+		if (pInCamera[2] <= 0)
+			return false;
 	}
 
 	// Return false if nothing saw the LED at all

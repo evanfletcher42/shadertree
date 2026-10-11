@@ -56,6 +56,9 @@ public:
 	// Works okay for LED strings.  
 	int InterpolateNewPoints();
 
+	// A frame's observation of an LED, or nullptr.
+	const PointObservation_t* FindObservation(int nFrameIdx, int nLedIdx) const;
+
 	// Test whether an LED is in front of all cameras that observe it.
 	// Useful for resetting bad points or poor triangulations.
 	bool TestLedInFrontOfAllObservingCameras( int nLedIdx );
@@ -94,7 +97,7 @@ public:
 	// Attempt up to this many times to triangulate a point.
 	static constexpr int k_nMaxTriangulationRetries = 10;
 
-	// Outlier observations are erased from these.
+	// Sorted by LED index within each frame.  Outlier observations are erased from these.
 	std::vector< std::vector< PointObservation_t > >* m_pObservations;
 
 	// Cameras culled for a bad pose; never re-added.

@@ -25,6 +25,7 @@ BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pOb
 	// No points are initialized (yet)
 	memset(m_ledPoints, 0, sizeof(m_ledPoints));
 	memset(m_pointsInitialized, 0, sizeof(m_pointsInitialized));
+	memset(m_pointsInterpolated, 0, sizeof(m_pointsInterpolated));
 
 	// Initial alignment transform -> identity
 	memset(m_alignedFromWorld, 0, sizeof(m_alignedFromWorld));
@@ -249,14 +250,13 @@ bool BundleAdjuster::Reconstruct()
 
 	m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
 
-	// Paper over any gaps with linear interpolation.  
-	// Attempt one last round of bundle adjustment in case any of these LEDs are observed.  They won't move if not.  
-
-	m_visualizer.SetTitle("Interpolate missing points & solve...");
-	//InterpolateNewPoints();
+	m_visualizer.SetTitle("Final solve...");
 	ceres::Problem problem4;
 	SetupBundleAdjustmentProblem(problem4, true, true, true);
 	SolveProblem(problem4);
+
+	// After all solves: interpolated LEDs aren't observed, so BA would never move them.
+	InterpolateNewPoints();
 
 	printf("Reconstruct complete\n");
 	printf("Solution used %zu of %zu frames\n", m_cameraFromWorldPoses.size(), m_pObservations->size());
@@ -629,60 +629,66 @@ int BundleAdjuster::TriangulateNewPoints()
 
 int BundleAdjuster::InterpolateNewPoints()
 {
-	// Initialize points via linear interpolation across gaps.  
-	// These LED strands are sequentially numbered with uniform spacing.
+	// Strings are nearly straight between neighbors: across a gap of 3, 90% of LEDs land within 0.9 LED spacings of
+	// truth (step 8 tuning).  Never across strands, and never past a strand's last solved LED (its tail is real).
+	std::vector<double> pitches;
+	for (int i = 0; i + 1 < k_nMaxLeds; i++)
+	{
+		if (m_pointsInitialized[i] && m_pointsInitialized[i + 1] && i / k_nLedsPerStrand == (i + 1) / k_nLedsPerStrand)
+			pitches.push_back(cv::norm(cv::Vec3d(m_ledPoints[i + 1]) - cv::Vec3d(m_ledPoints[i])));
+	}
 
-	int nLastInitializedLedIdx = 0;
-	int nNewPoints = 0;
+	if (pitches.empty())
+		return 0;
 
-	// Find first LED
+	double flPitch = Median(pitches);
+
+	int nAdded = 0;
+	int nTooLong = 0;
+	int nRejected = 0;
+	int nPrev = -1;
 	for (int i = 0; i < k_nMaxLeds; i++)
 	{
-		if (m_pointsInitialized[i])
+		if (!m_pointsInitialized[i])
+			continue;
+
+		int nFirst = nPrev;
+		int nGap = i - nFirst - 1;
+		nPrev = i;
+
+		if (nFirst < 0 || nGap <= 0 || nFirst / k_nLedsPerStrand != i / k_nLedsPerStrand)
+			continue;
+
+		if (nGap > k_nMaxInterpGap)
 		{
-			nLastInitializedLedIdx = i;
-			break;
+			nTooLong++;
+			continue;
+		}
+
+		// The straight line between the ends can't be longer than the string between them; if it is, an end is misplaced.
+		cv::Vec3d first(m_ledPoints[nFirst]);
+		cv::Vec3d last(m_ledPoints[i]);
+		if (cv::norm(last - first) > k_flMaxInterpChordRatio * (nGap + 1) * flPitch)
+		{
+			nRejected++;
+			continue;
+		}
+
+		for (int j = 1; j <= nGap; j++)
+		{
+			cv::Vec3d p = first + (last - first) * (j / (double)(nGap + 1));
+			int nLedIdx = nFirst + j;
+			m_ledPoints[nLedIdx][0] = p[0];
+			m_ledPoints[nLedIdx][1] = p[1];
+			m_ledPoints[nLedIdx][2] = p[2];
+			m_pointsInterpolated[nLedIdx] = true;
+			nAdded++;
 		}
 	}
 
-	// Find gaps
-	bool bGap = false;
-	for (int i = nLastInitializedLedIdx; i < k_nMaxLeds; i++)
-	{
-		if (bGap)
-		{
-			if (m_pointsInitialized[i])
-			{
-				int nDt = i - nLastInitializedLedIdx;
-				double flDx = (m_ledPoints[i][0] - m_ledPoints[nLastInitializedLedIdx][0]) / nDt;
-				double flDy = (m_ledPoints[i][1] - m_ledPoints[nLastInitializedLedIdx][1]) / nDt;
-				double flDz = (m_ledPoints[i][2] - m_ledPoints[nLastInitializedLedIdx][2]) / nDt;
-
-				for (int j = 1; j < i - nLastInitializedLedIdx; j++)
-				{
-					int k = nLastInitializedLedIdx + j;
-					m_ledPoints[k][0] = m_ledPoints[nLastInitializedLedIdx][0] + flDx * j;
-					m_ledPoints[k][1] = m_ledPoints[nLastInitializedLedIdx][1] + flDy * j;
-					m_ledPoints[k][2] = m_ledPoints[nLastInitializedLedIdx][2] + flDz * j;
-					m_pointsInitialized[k] = true;
-
-					printf("Linear interp init LED %d\n", k);
-
-					nNewPoints++;
-				}
-			}
-		}
-
-		bGap = !m_pointsInitialized[i];
-
-		if (m_pointsInitialized[i])
-		{
-			nLastInitializedLedIdx = i;
-		}
-	}
-
-	printf("InterpolateNewPoints: Added %d new LEDs\n", nNewPoints);
-	return nNewPoints;
+	printf("InterpolateNewPoints: %d LEDs interpolated (gaps <= %d, pitch %.4f); %d gaps too long, %d rejected by spacing\n",
+		nAdded, k_nMaxInterpGap, flPitch, nTooLong, nRejected);
+	return nAdded;
 }
 
 const PointObservation_t* BundleAdjuster::FindObservation(int nFrameIdx, int nLedIdx) const
@@ -1137,7 +1143,7 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	std::vector<std::array<double, 3>> points;
 	for (int i = 0; i < k_nMaxLeds; i++)
 	{
-		if (!m_pointsInitialized[i])
+		if (!m_pointsInitialized[i] && !m_pointsInterpolated[i])
 			continue;
 
 		std::array<double, 3> p;
@@ -1206,6 +1212,7 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 		led["x"] = flX;
 		led["y"] = flY;
 		led["z"] = flZ;
+		led["interpolated"] = m_pointsInterpolated[leds[i]];
 		list.append(led);
 	}
 

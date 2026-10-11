@@ -51,8 +51,7 @@ public:
 	// Initialize uninitialized LEDs seen by 2+ posed frames, by DLT over all of them.
 	int TriangulateNewPoints();
 
-	// Initialize points by linearally interpolating their positions between other points.  
-	// Works okay for LED strings.  
+	// Fill short gaps within a strand by linear interpolation between solved LEDs (m_pointsInterpolated).
 	int InterpolateNewPoints();
 
 	// A frame's observation of an LED, or nullptr.
@@ -101,6 +100,10 @@ public:
 	// A new camera's PnP solve must have at least this fraction of inliers.
 	static constexpr double k_flMinPnPInlierFrac = 0.8;
 
+	// InterpolateNewPoints: longest gap filled, and the most a gap's end-to-end distance may exceed (gap + 1) x pitch.
+	static constexpr int k_nMaxInterpGap = 3;
+	static constexpr double k_flMaxInterpChordRatio = 1.1;
+
 	// Reprojection error above which an observation (or a camera's median) is an outlier.
 	static constexpr double k_flMaxReprojectionErrorPx = 10.0;
 
@@ -122,6 +125,9 @@ public:
 
 	// Marks whether a given LED has been initialized.
 	bool m_pointsInitialized[k_nMaxLeds];
+
+	// Filled in by InterpolateNewPoints; not initialized, so never part of a solve or --output.
+	bool m_pointsInterpolated[k_nMaxLeds];
 
 private:
 	static void composeRT(double* pose, cv::Mat& poseRT);

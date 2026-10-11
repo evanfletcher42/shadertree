@@ -28,90 +28,38 @@ def now_playing(request):
 
     return HttpResponse(template.render(context, request))
 
-def edit_new(request):
-    template = loader.get_template("shader_app/editor.html")
-
-    # load led positions
-    coords_list = []  # TBD: Default for debug?
+def render_editor(request, context):
     coords_obj = LedCoordsCfg.objects.first()
-    if coords_obj:
-        coords_list = coords_obj.content
+    pfx_obj = ShaderPrefix.objects.first()
+    context.update({
+        "ledcoords": json.dumps(coords_obj.content if coords_obj else []),
+        "shaderprefix": pfx_obj.content if pfx_obj else "",
+        "playseconds": settings.SHADER_PLAY_SECONDS
+    })
+    return render(request, "shader_app/editor.html", context)
 
-    coords_str = json.dumps(coords_list)
 
-    # load shader prefix
-    try:
-        pfx_obj = ShaderPrefix.objects.first()
-        prefix_text = pfx_obj.content if pfx_obj else ""
-    except ShaderPrefix.DoesNotExist:
-        prefix_text = ""
-
-    # Load default shader content
-    try:
-        editor_obj = DefaultShaderEditorText.objects.first()
-        editor_text = editor_obj.content if editor_obj else ""
-    except DefaultShaderEditorText.DoesNotExist:
-        editor_text = ""
-
-    context = {
+def edit_new(request):
+    editor_obj = DefaultShaderEditorText.objects.first()
+    return render_editor(request, {
         "shaderident": "",
         "shadertitle": "",
         "shaderauthor": "",
         "shaderplayable": True,
-        "ledcoords": coords_str,
-        "shaderprefix": prefix_text,
-        "editortext": editor_text,
-        "playseconds": settings.SHADER_PLAY_SECONDS
-    } 
-    
-    return HttpResponse(template.render(context, request))
+        "editortext": editor_obj.content if editor_obj else ""
+    })
 
 
 def edit_existing(request, shader_ident):
-    try:
-        shader = get_object_or_404(Shader, ident=shader_ident)
-    except Http404:
-        raise Http404("Page not found.")
-
-    if shader.is_deleted:
-        raise Http404("Page not found.")
-
-    template = loader.get_template("shader_app/editor.html")
-
-    # load led positions
-    coords_list = []  # TBD: Default for debug?
-    coords_obj = LedCoordsCfg.objects.first()
-    if coords_obj:
-        coords_list = coords_obj.content
-
-    coords_str = json.dumps(coords_list)
-
-    # load shader prefix
-    try:
-        pfx_obj = ShaderPrefix.objects.first()
-        prefix_text = pfx_obj.content if pfx_obj else ""
-    except ShaderPrefix.DoesNotExist:
-        prefix_text = ""
-
-    # load shader content
-    try:
-        latest_shader_version = shader.versions.order_by('-created_at').first()
-        editor_text = latest_shader_version.content if latest_shader_version else ""
-    except ShaderVersion.DoesNotExist:
-        editor_text = ""
-
-    context = {
+    shader = get_object_or_404(Shader, ident=shader_ident, is_deleted=False)
+    latest_shader_version = shader.versions.order_by('-created_at').first()
+    return render_editor(request, {
         "shaderident": shader.ident,
         "shadertitle": shader.title,
         "shaderauthor": shader.author,
         "shaderplayable": shader.is_playable,
-        "ledcoords": coords_str,
-        "shaderprefix": prefix_text,
-        "editortext": editor_text,
-        "playseconds": settings.SHADER_PLAY_SECONDS
-    }
-
-    return HttpResponse(template.render(context, request))
+        "editortext": latest_shader_version.content if latest_shader_version else ""
+    })
 
 
 def about(request):
@@ -228,14 +176,6 @@ def shader_list(request):
     shader_list = list(shaders)  # QuerySet->List
     return JsonResponse(shader_list, safe=False)
 
-
-@require_GET
-def led_positions(request):
-    coords_obj = LedCoordsCfg.objects.first()
-    if not coords_obj:
-        return JsonResponse({'error': 'LED configuration missing on server.'}, status=500)
-
-    return JsonResponse({"coords": coords_obj.content})
 
 @require_GET
 def api_now_playing(request):

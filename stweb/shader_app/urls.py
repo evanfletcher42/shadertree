@@ -5,8 +5,7 @@ from . import views
 urlpatterns = [
     path("", views.index, name="index"),
     path("shader_list/", views.shader_list, name="shader_list"),
-    path("led_positions/", views.led_positions, name="led_positions"),
-    path("edit/new/", views.edit_new, name="edit_existing"),
+    path("edit/new/", views.edit_new, name="edit_new"),
     path("edit/<str:shader_ident>/", views.edit_existing, name="edit_existing"),
     path("now-playing", views.now_playing, name="now_playing"),
     path("about", views.about, name="about"),

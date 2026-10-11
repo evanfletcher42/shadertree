@@ -1,4 +1,5 @@
 import json
+from django.contrib.auth.models import User
 from django.test import TestCase
 from .models import Shader, ShaderVersion, LedCoordsCfg, PlaybackControl, BannedIP
 
@@ -112,3 +113,19 @@ class EditorPageTests(TestCase):
         shader = make_shader(is_deleted=True)
         self.assertEqual(self.client.get(f"/edit/{shader.ident}/").status_code, 404)
         self.assertEqual(self.client.get("/edit/nope/").status_code, 404)
+
+
+class AdminSetLatestTests(TestCase):
+    def test_view_and_action(self):
+        self.client.force_login(User.objects.create_superuser("admin", "", "pw"))
+        shader = make_shader()
+        old = shader.versions.get()
+        ShaderVersion.objects.create(shader=shader, content="// newer")
+
+        resp = self.client.get(f"/admin/shader_app/shader/{shader.id}/set_latest/{old.id}/", REMOTE_ADDR="10.0.0.2")
+        self.assertRedirects(resp, f"/admin/shader_app/shader/{shader.id}/change/")
+        latest = shader.versions.order_by("-created_at").first()
+        self.assertEqual((latest.content, latest.ip_addr), (old.content, "10.0.0.2"))
+
+        self.client.post("/admin/shader_app/shaderversion/", {"action": "set_as_latest_version", "_selected_action": [old.id]})
+        self.assertEqual(shader.versions.count(), 4)

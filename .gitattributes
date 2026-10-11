@@ -1,7 +1,5 @@
 * text=auto eol=lf
 *.sh text eol=lf
-*.sln text eol=crlf
-*.vcxproj* text eol=crlf
 *.bat text eol=crlf
 *.dat binary
 *.ico binary

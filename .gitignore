@@ -31,8 +31,9 @@ x64/
 *.MOV.json
 *.mov.json
 
-# Third-party install trees (until step 3 replaces them with sources + build scripts)
-reconstruct/thirdparty/*
+# CMake
+reconstruct/build/
+CMakeUserPresets.json
 
 # Editors
 .vscode/

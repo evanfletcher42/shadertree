@@ -918,7 +918,8 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	options.num_threads = std::clamp(problem.NumResidualBlocks() / k_nMinimumResidualsPerThread, 1, nMachineThreads);
 
-	options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
+	// ~150 cameras: the reduced camera matrix is small enough (~1000^2) to factor densely.
+	options.linear_solver_type = ceres::LinearSolverType::DENSE_SCHUR;
 	options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
 	options.use_nonmonotonic_steps = true;
 

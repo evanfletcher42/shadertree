@@ -51,7 +51,7 @@ void CPointsVisualizer::OnDataUpdate(const std::unordered_map<int, std::array<do
 
 	m_cameraFromWorldPoses = cameraFromWorldPoses;
 	memcpy(m_ledPoints, ledPoints, sizeof(m_ledPoints));
-	memcpy(m_bLedsInitialized, ledPoints, sizeof(m_bLedsInitialized));
+	memcpy(m_bLedsInitialized, pointsInitialized, sizeof(m_bLedsInitialized));
 
 	m_bNewDataAvailable = true;
 	
@@ -60,7 +60,9 @@ void CPointsVisualizer::OnDataUpdate(const std::unordered_map<int, std::array<do
 
 void CPointsVisualizer::SetTitle(const std::string& title)
 {
+	std::lock_guard<std::mutex> lk(m_dataMutex);
 	m_titleText = title;
+	m_bNewDataAvailable = true;
 }
 
 void CPointsVisualizer::UIThreadFunc()
@@ -70,7 +72,7 @@ void CPointsVisualizer::UIThreadFunc()
 	while (!m_bQuit)
 	{
 		// Poll for new data.
-		if (m_bNewDataAvailable)
+		if (m_bNewDataAvailable.exchange(false))
 		{
 			std::unique_lock<std::mutex> lk(m_dataMutex);
 			Draw();

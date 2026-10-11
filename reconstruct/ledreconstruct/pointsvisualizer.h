@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -64,7 +65,7 @@ private:
 	cv::Mat m_viewYZ;  // "right," in lower right
 	cv::Mat m_viewXZ;  // "front," in lower left
 
-	// Mutex protecting LED and camera pose data
+	// Mutex protecting LED and camera pose data and the title
 	std::mutex m_dataMutex;
 
 	// Local copies of camera and point poses
@@ -73,7 +74,7 @@ private:
 	bool m_bLedsInitialized[k_nMaxLeds];
 
 	// new-data-available flag
-	bool m_bNewDataAvailable;
+	std::atomic<bool> m_bNewDataAvailable;
 
 	// XYZ bounding box
 	double m_flBoundsMinX;
@@ -88,6 +89,6 @@ private:
 	std::thread m_uiThread;
 
 	// quit flag
-	bool m_bQuit;
+	std::atomic<bool> m_bQuit;
 };
 

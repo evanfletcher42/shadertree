@@ -28,8 +28,8 @@ static constexpr double k_flFpsTolerance = 0.01;
 // Warn if the measured cycle length is off by more than this; peaks are whole frames, so +-1 is rounding.
 static constexpr double k_flCycleToleranceFrames = 1.5;
 
-// Only scan this many cycles' worth of frames for sync.
-static constexpr int k_nMaxScanCycles = 4;
+// Only scan this many cycles' worth of frames for sync; 2.5 always holds two whole pulses away from the ends.
+static constexpr double k_flMaxScanCycles = 2.5;
 
 // Smaller same-index blobs are noise.
 static constexpr int k_nMinBlobPixels = 9;
@@ -69,7 +69,7 @@ static double ExpectedCycleFrames( double flFps )
 }
 
 
-// Mean intensity of each frame, up to k_nMaxScanCycles cycles.
+// Mean intensity of each frame, up to k_flMaxScanCycles cycles.
 static bool ReadFrameIntensities( std::vector< double > *pIntensities, double *pflFps, const std::string &videoPath )
 {
 	cv::VideoCapture cap( videoPath );
@@ -86,7 +86,7 @@ static bool ReadFrameIntensities( std::vector< double > *pIntensities, double *p
 		flFps = k_flCaptureFps;
 	}
 
-	int nMaxFrames = ( int )ceil( k_nMaxScanCycles * ExpectedCycleFrames( flFps ) );
+	int nMaxFrames = ( int )ceil( k_flMaxScanCycles * ExpectedCycleFrames( flFps ) );
 	cv::Mat frame;
 	while ( ( int )pIntensities->size() < nMaxFrames && cap.read( frame ) )
 	{

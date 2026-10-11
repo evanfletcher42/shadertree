@@ -1,7 +1,7 @@
 // app.js
 
 // Grab editor template data
-data = document.currentScript.dataset;
+const data = document.currentScript.dataset;
 const csrfToken = data.csrftoken;
 if(!csrfToken)
     console.error("CSRF token not found");
@@ -94,27 +94,28 @@ function highlightErrorLines(errorMessage) {
 // Shader Compilation Utilities
 // ------------------------
 
-function compileShader(source, type) {
+// Shaders are flagged for deletion once attached, so deleting the program frees them
+function attachShader(program, source, type) {
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
+    gl.attachShader(program, shader);
+    gl.deleteShader(shader);
 
-    const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-    if (!success) {
-        const info = gl.getShaderInfoLog(shader);
-        gl.deleteShader(shader);
-        throw new Error('Shader compilation failed:\n' + info);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error('Shader compilation failed:\n' + gl.getShaderInfoLog(shader));
     }
-    return shader;
 }
 
 function createProgram(vertexSource, fragmentSource, transformFeedbackVaryings = null) {
     const program = gl.createProgram();
-    const vertexShader = compileShader(vertexSource, gl.VERTEX_SHADER);
-    const fragmentShader = compileShader(fragmentSource, gl.FRAGMENT_SHADER);
-
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
+    try {
+        attachShader(program, vertexSource, gl.VERTEX_SHADER);
+        attachShader(program, fragmentSource, gl.FRAGMENT_SHADER);
+    } catch (e) {
+        gl.deleteProgram(program);
+        throw e;
+    }
 
     if (transformFeedbackVaryings) {
         gl.transformFeedbackVaryings(program, transformFeedbackVaryings, gl.INTERLEAVED_ATTRIBS);
@@ -265,22 +266,19 @@ gl.bindVertexArray(null);
 // Capture Colors with Transform Feedback
 // ------------------------
 
-function captureColors(tfProgram) {
-    if (!tfProgram) return;
+// Transform feedback inputs: iPos at location 0, iIdx at location 1
+const tfCaptureVAO = gl.createVertexArray();
+gl.bindVertexArray(tfCaptureVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+gl.bindBuffer(gl.ARRAY_BUFFER, indexBuffer);
+gl.enableVertexAttribArray(1);
+gl.vertexAttribIPointer(1, 1, gl.UNSIGNED_INT, 0, 0);
+gl.bindVertexArray(null);
 
-    // Create and bind a Vertex Array Object for transform feedback
-    const tfCaptureVAO = gl.createVertexArray();
+function captureColors() {
     gl.bindVertexArray(tfCaptureVAO);
-
-    // Bind position buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-
-    // Bind index buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, indexBuffer);
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribIPointer(1, 1, gl.UNSIGNED_INT, 0, 0);
 
     // Bind color buffer for transform feedback
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, colorBuffer);
@@ -288,16 +286,9 @@ function captureColors(tfProgram) {
     // Use the transform feedback program
     gl.useProgram(tfProgram);
 
-    // Set uniforms
-    const iTimeLocation = gl.getUniformLocation(tfProgram, 'iTime');
-    if (iTimeLocation != null) {
-        gl.uniform1f(iTimeLocation, playTime);
-    }
-
-    const frameIdxLocation = gl.getUniformLocation(tfProgram, 'iFrame');
-    if (frameIdxLocation != null) {
-        gl.uniform1i(frameIdxLocation, frameIdx);
-    }
+    // Set uniforms (null locations are ignored)
+    gl.uniform1f(tfTimeLocation, playTime);
+    gl.uniform1i(tfFrameLocation, frameIdx);
 
     // Disable rasterization
     gl.enable(gl.RASTERIZER_DISCARD);
@@ -320,16 +311,16 @@ function captureColors(tfProgram) {
 
     // Unbind the transform feedback buffer to prevent conflicts
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
-
-    // Clean up the temporary VAO
-    gl.deleteVertexArray(tfCaptureVAO);
 }
 
 // ------------------------
 // Rendering Loop
 // ------------------------
 
-let tfProgram; // Transform Feedback Program
+let tfProgram = null; // Transform Feedback Program
+let tfSource = null;
+let tfTimeLocation = null;
+let tfFrameLocation = null;
 
 // ------------------------
 // Playback
@@ -391,15 +382,23 @@ let isDirty = false;
 
 // Function to compile user shader and set up transform feedback
 function setupTransformFeedbackProgram() {
+    const source = editor.getValue();
+    if (source === tfSource)
+        return;
+    tfSource = source;
+
+    gl.deleteProgram(tfProgram);
+    tfProgram = null;
     try {
         tfProgram = compileUserShader();
+        tfTimeLocation = gl.getUniformLocation(tfProgram, 'iTime');
+        tfFrameLocation = gl.getUniformLocation(tfProgram, 'iFrame');
         clearError();
         clearErrorMarkers();
         bUserShaderCompiles = true;
     } catch (e) {
         showError(e.message);
         highlightErrorLines(e.message);
-        tfProgram = null;
         bUserShaderCompiles = false;
     }
 }
@@ -421,7 +420,7 @@ function render() {
 
     // Capture colors using Transform Feedback
     if (tfProgram) {
-        captureColors(tfProgram);
+        captureColors();
     }
     updatePlayerBar();
     if (!isPaused && !isScrubbing)

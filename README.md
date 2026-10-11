@@ -20,7 +20,9 @@ For a faster debuggable build use `cmake --build --preset windows-relwithdebinfo
 
 ### VS Code
 
-Open the repository root and install the recommended extensions (CMake Tools, C/C++). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging), then use the `ledreconstruct` launch configurations, which solve from a directory of cached observation JSONs. On Windows, `VCPKG_ROOT` must be set: start VS Code from a Developer PowerShell (`code .`), or set `VCPKG_ROOT` as a user environment variable pointing at Visual Studio's `VC\vcpkg` directory.
+Open the repository root and install the recommended extensions (CMake Tools, C/C++, Python). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging), then use the `ledreconstruct` launch configurations, which solve from a directory of cached observation JSONs. On Windows, `VCPKG_ROOT` must be set: start VS Code from a Developer PowerShell (`code .`), or set `VCPKG_ROOT` as a user environment variable pointing at Visual Studio's `VC\vcpkg` directory.
+
+For Python completion on the web side (`stweb/`), create a virtual environment at the repository root, which VS Code picks up automatically: `python -m venv .venv`, then install `stweb/requirements.txt` into it.
 
 ### Ubuntu 24.04
 

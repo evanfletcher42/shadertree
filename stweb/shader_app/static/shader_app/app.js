@@ -31,6 +31,13 @@ const prefixView = ace.edit("editorHeaderText", {
 prefixView.setValue(shaderPrefix.trimEnd(), -1);
 prefixView.renderer.$cursorLayer.element.style.display = "none";
 
+// Line the prefix text up with the editor's text, past its gutter
+editor.renderer.on("afterRender", () => {
+    const padding = editor.renderer.gutterWidth + editor.renderer.$padding;
+    if (prefixView.renderer.$padding !== padding)
+        prefixView.renderer.setPadding(padding);
+});
+
 editor.setValue(data.editortext, -1);  // Set the fetched text as the editor's content
 
 

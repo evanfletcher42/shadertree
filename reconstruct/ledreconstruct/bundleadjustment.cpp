@@ -101,30 +101,45 @@ bool BundleAdjuster::InitializeBA()
 
 	printf("Init with frame %d (%d LEDs)\n", nFrame1, nMaxObs);
 
+	// Search the other frames in order, starting 5 after frame 1 and wrapping around.
 	printf("Looking for perspective differences...\n");
-	int nFrame2;
-	for (nFrame2 = nFrame1+5; nFrame2 < m_pObservations->size(); nFrame2++)
+	int nFrames = (int)m_pObservations->size();
+	int nFrame2 = -1;
+	for (int i = 0; i < nFrames; i++)
 	{
-		cv::Mat homography;
-		bool bHomographySuccess = TwoFrameHomography(nFrame1, nFrame2, homography);
+		int nCandidate = (nFrame1 + 5 + i) % nFrames;
+		if (nCandidate == nFrame1)
+			continue;
 
-		printf("Frame %d -> %d: %d\n", nFrame1, nFrame2, bHomographySuccess);
+		cv::Mat homography;
+		bool bHomographySuccess = TwoFrameHomography(nFrame1, nCandidate, homography);
+
+		printf("Frame %d -> %d: %d\n", nFrame1, nCandidate, bHomographySuccess);
 
 		if (!bHomographySuccess)
+		{
+			nFrame2 = nCandidate;
 			break;
+		}
+	}
+
+	if (nFrame2 < 0)
+	{
+		printf("InitializeBA: No frame has enough parallax with frame %d\n", nFrame1);
+		return false;
 	}
 	
 	// Do a DSO-style two frame init (where frame 1 points are unprojected to Z=1)
-	TwoFramePlanarInit(nFrame1, nFrame2);
+	if (!TwoFramePlanarInit(nFrame1, nFrame2))
+		return false;
 
 	// Refine with a two-frame bundle adjustment.  
 	ceres::Problem problem;
 
-	SetupBundleAdjustmentProblem(problem, false, true, true);
+	if (!SetupBundleAdjustmentProblem(problem, false, true, true))
+		return false;
 
-	SolveProblem(problem);
-
-	return true;
+	return SolveProblem(problem);
 }
 
 bool BundleAdjuster::Reconstruct()

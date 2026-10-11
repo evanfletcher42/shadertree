@@ -97,7 +97,9 @@ int main(int argc, char** argv)
         return 1;
     };
 
-    bundleAdjuster.Reconstruct();
+    if (!bundleAdjuster.Reconstruct())
+        return 1;
+
     bundleAdjuster.FindAlignmentTransform();
 
     if (!outSolutionPath.empty())

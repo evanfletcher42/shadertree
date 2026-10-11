@@ -49,7 +49,7 @@ def cmd_points(a_path, ref_path):
     print(f"distance (ref units; ref extent {height:.4f}):")
     for name, v in (("median", np.median(dist)), ("mean", dist.mean()), ("p90", np.percentile(dist, 90)),
                     ("p99", np.percentile(dist, 99)), ("max", dist.max())):
-        print(f"  {name:6s} {v:.5f}  ({100 * v / height:.3f}% of extent)")
+        print(f"  {name:6s} {v:.4g}  ({100 * v / height:.4g}% of extent)")
     for frac in (0.01, 0.02, 0.05):
         print(f"  > {100 * frac:.0f}% of extent: {(dist > frac * height).sum()}")
 

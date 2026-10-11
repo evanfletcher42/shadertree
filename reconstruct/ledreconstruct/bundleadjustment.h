@@ -47,8 +47,19 @@ public:
 	// Returns the number of new cameras initialized.  
 	int InitializeNewCameras();
 
-	// Initialize uninitialized LEDs seen by 2+ posed frames, by DLT over all of them.
+	// Initialize uninitialized LEDs seen by 2+ posed frames, by TriangulateConsensus.
 	int TriangulateNewPoints();
+
+	// Posed frames observing each LED whose m_pointsInitialized is bInitialized.
+	std::unordered_map< int, std::vector< int > > FindObservingFrames( bool bInitialized ) const;
+
+	// Triangulates an LED into m_ledPoints from its observations in frames: DLT over all of them, or, if no more than
+	// half agree with that, over the agreeing observations of the best 2-frame DLT.  Returns the number that agree.
+	int TriangulateConsensus( int nLedIdx, const std::vector< int > &frames );
+
+	// DLT over the subset of observations, into m_ledPoints; returns the indices of all observations that agree with it.
+	std::vector< int > TriangulateSubset( int nLedIdx, const std::vector< int > &frames, const std::vector< cv::Mat > &projections,
+		const std::vector< cv::Point2f > &undistorted, const std::vector< int > &subset );
 
 	// Fill short in-strand gaps by linear interpolation between solved LEDs.
 	int InterpolateNewPoints();
@@ -66,8 +77,9 @@ public:
 	// Reprojection error of one observation in pixels; infinite if the point is behind the camera.
 	double ComputeReprojectionError(const std::array<double, 6>& cameraFromWorld, const PointObservation_t& obs) const;
 
-	// Drop cameras whose median reprojection error exceeds k_flMaxReprojectionErrorPx (for good), then observations
-	// above it, then LEDs left with fewer than 2 observations.  Returns the number of LEDs culled.
+	// Drop cameras whose median reprojection error exceeds k_flMaxReprojectionErrorPx (for good), re-triangulate LEDs
+	// most of whose observations exceed it, then drop observations above it, then LEDs left with fewer than 2
+	// observations.  Returns the number of LEDs culled.
 	int CullReprojectionOutliers();
 
 	// Set up a bundle adjustment problem over the entire map, as specified.

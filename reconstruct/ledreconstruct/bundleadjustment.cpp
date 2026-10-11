@@ -2,6 +2,7 @@
 #include <cfloat>
 #include <fstream>
 #include <limits>
+#include <numeric>
 
 #include <Eigen/Core>
 #include <ceres/rotation.h>
@@ -558,27 +559,9 @@ int BundleAdjuster::TriangulateNewPoints()
 {
 	CScopedStageTimer timer(&m_stageTimes, "triangulate");
 
-	// Posed frames observing each uninitialized LED, and where.
-	std::unordered_map<int, std::vector< int > > ledTrackedFrames;
-	std::unordered_map<int, std::vector< cv::Point2f> > ledPoints;
-
-	for (auto& kv : m_cameraFromWorldPoses)
-	{
-		int nFrameIdx = kv.first;
-
-		for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx])
-		{
-			if (m_pointsInitialized[obs.nLedIdx])
-				continue;
-
-			ledTrackedFrames[obs.nLedIdx].push_back(nFrameIdx);
-			ledPoints[obs.nLedIdx].push_back(obs.p);
-		}
-	}
-
 	int nPointsTriangulated = 0;
 
-	for (const auto& kv : ledTrackedFrames)
+	for (const auto& kv : FindObservingFrames(false))
 	{
 		const int nLedIdx = kv.first;
 		const std::vector<int>& frames = kv.second;
@@ -586,31 +569,9 @@ int BundleAdjuster::TriangulateNewPoints()
 		if (frames.size() < 2)
 			continue;
 
-		// Linear (DLT) triangulation over every observing frame, in normalized camera coordinates.
-		std::vector<cv::Point2f> pUndistorted;
-		cv::undistortPoints(ledPoints[nLedIdx], pUndistorted, m_cameraMat, m_distCoefs);
-
-		cv::Mat A((int)frames.size() * 2, 4, CV_64F);
-		for (int i = 0; i < (int)frames.size(); i++)
-		{
-			cv::Mat camFromWorld;
-			composeRT(m_cameraFromWorldPoses[frames[i]].data(), camFromWorld);
-			camFromWorld.convertTo(camFromWorld, CV_64F);
-
-			cv::Mat(pUndistorted[i].x * camFromWorld.row(2) - camFromWorld.row(0)).copyTo(A.row(2 * i));
-			cv::Mat(pUndistorted[i].y * camFromWorld.row(2) - camFromWorld.row(1)).copyTo(A.row(2 * i + 1));
-		}
-
-		cv::Mat pInWorldHomogenous;
-		cv::SVD::solveZ(A, pInWorldHomogenous);
-
-		double flW = pInWorldHomogenous.at<double>(3);
-		if (fabs(flW) < 1e-12)
+		if (TriangulateConsensus(nLedIdx, frames) < 2)
 			continue;
 
-		m_ledPoints[nLedIdx][0] = pInWorldHomogenous.at<double>(0) / flW;
-		m_ledPoints[nLedIdx][1] = pInWorldHomogenous.at<double>(1) / flW;
-		m_ledPoints[nLedIdx][2] = pInWorldHomogenous.at<double>(2) / flW;
 		m_pointsInitialized[nLedIdx] = true;
 
 		if (!TestLedInFrontOfAllObservingCameras(nLedIdx))
@@ -623,6 +584,102 @@ int BundleAdjuster::TriangulateNewPoints()
 	}
 
 	return nPointsTriangulated;
+}
+
+std::unordered_map<int, std::vector<int>> BundleAdjuster::FindObservingFrames(bool bInitialized) const
+{
+	std::unordered_map<int, std::vector<int>> ledFrames;
+	for (const auto& kv : m_cameraFromWorldPoses)
+	{
+		for (const PointObservation_t& obs : (*m_pObservations)[kv.first])
+		{
+			if (m_pointsInitialized[obs.nLedIdx] != bInitialized)
+				continue;
+
+			ledFrames[obs.nLedIdx].push_back(kv.first);
+		}
+	}
+
+	return ledFrames;
+}
+
+int BundleAdjuster::TriangulateConsensus(int nLedIdx, const std::vector<int>& frames)
+{
+	std::vector<cv::Point2f> points;
+	std::vector<cv::Mat> projections;
+	for (int nFrameIdx : frames)
+	{
+		points.push_back(FindObservation(nFrameIdx, nLedIdx)->p);
+
+		cv::Mat camFromWorld;
+		composeRT(m_cameraFromWorldPoses.at(nFrameIdx).data(), camFromWorld);
+		camFromWorld.convertTo(camFromWorld, CV_64F);
+		projections.push_back(camFromWorld);
+	}
+
+	// Normalized camera coordinates
+	std::vector<cv::Point2f> undistorted;
+	cv::undistortPoints(points, undistorted, m_cameraMat, m_distCoefs);
+
+	std::vector<int> all(frames.size());
+	std::iota(all.begin(), all.end(), 0);
+	std::vector<int> best = TriangulateSubset(nLedIdx, frames, projections, undistorted, all);
+	if (best.size() * 2 > frames.size())
+		return (int)best.size();
+
+	// A few consistent bad observations (a reflection seen from adjacent views) can outvote the rest in a DLT over all.
+	for (int i = 0; i < (int)frames.size(); i++)
+	{
+		for (int j = i + 1; j < (int)frames.size(); j++)
+		{
+			std::vector<int> inliers = TriangulateSubset(nLedIdx, frames, projections, undistorted, { i, j });
+			if (inliers.size() > best.size())
+			{
+				best = std::move(inliers);
+			}
+		}
+	}
+
+	if (best.size() < 2)
+		return 0;
+
+	return (int)TriangulateSubset(nLedIdx, frames, projections, undistorted, best).size();
+}
+
+std::vector<int> BundleAdjuster::TriangulateSubset(int nLedIdx, const std::vector<int>& frames, const std::vector<cv::Mat>& projections,
+	const std::vector<cv::Point2f>& undistorted, const std::vector<int>& subset)
+{
+	std::vector<int> inliers;
+
+	cv::Mat A((int)subset.size() * 2, 4, CV_64F);
+	for (int i = 0; i < (int)subset.size(); i++)
+	{
+		const cv::Mat& P = projections[subset[i]];
+		const cv::Point2f& p = undistorted[subset[i]];
+		cv::Mat(p.x * P.row(2) - P.row(0)).copyTo(A.row(2 * i));
+		cv::Mat(p.y * P.row(2) - P.row(1)).copyTo(A.row(2 * i + 1));
+	}
+
+	cv::Mat pInWorldHomogenous;
+	cv::SVD::solveZ(A, pInWorldHomogenous);
+
+	double flW = pInWorldHomogenous.at<double>(3);
+	if (fabs(flW) < 1e-12)
+		return inliers;
+
+	m_ledPoints[nLedIdx][0] = pInWorldHomogenous.at<double>(0) / flW;
+	m_ledPoints[nLedIdx][1] = pInWorldHomogenous.at<double>(1) / flW;
+	m_ledPoints[nLedIdx][2] = pInWorldHomogenous.at<double>(2) / flW;
+
+	for (int i = 0; i < (int)frames.size(); i++)
+	{
+		if (ComputeReprojectionError(m_cameraFromWorldPoses.at(frames[i]), *FindObservation(frames[i], nLedIdx)) <= k_flMaxReprojectionErrorPx)
+		{
+			inliers.push_back(i);
+		}
+	}
+
+	return inliers;
 }
 
 int BundleAdjuster::InterpolateNewPoints()
@@ -807,6 +864,36 @@ int BundleAdjuster::CullReprojectionOutliers()
 		nCamerasRemoved++;
 	}
 
+	// An LED placed while only a few bad views were posed would otherwise lose all its good observations here.
+	int nRetriangulated = 0;
+	for (const auto& kv : FindObservingFrames(true))
+	{
+		const int nLedIdx = kv.first;
+		const std::vector<int>& frames = kv.second;
+
+		int nInliers = 0;
+		for (int nFrameIdx : frames)
+		{
+			if (ComputeReprojectionError(m_cameraFromWorldPoses.at(nFrameIdx), *FindObservation(nFrameIdx, nLedIdx)) <= k_flMaxReprojectionErrorPx)
+			{
+				nInliers++;
+			}
+		}
+
+		if (nInliers * 2 > (int)frames.size())
+			continue;
+
+		double prevPoint[3];
+		memcpy(prevPoint, m_ledPoints[nLedIdx], sizeof(prevPoint));
+		if (TriangulateConsensus(nLedIdx, frames) <= nInliers)
+		{
+			memcpy(m_ledPoints[nLedIdx], prevPoint, sizeof(prevPoint));
+			continue;
+		}
+
+		nRetriangulated++;
+	}
+
 	int nObservationsRemoved = 0;
 	for (const auto& kv : m_cameraFromWorldPoses)
 	{
@@ -841,7 +928,7 @@ int BundleAdjuster::CullReprojectionOutliers()
 		nLedsRemoved++;
 	}
 
-	printf("CullReprojectionOutliers: Removed %d cameras, %d observations, %d LEDs\n", nCamerasRemoved, nObservationsRemoved, nLedsRemoved);
+	printf("CullReprojectionOutliers: Re-triangulated %d LEDs; removed %d cameras, %d observations, %d LEDs\n", nRetriangulated, nCamerasRemoved, nObservationsRemoved, nLedsRemoved);
 	return nLedsRemoved;
 }
 

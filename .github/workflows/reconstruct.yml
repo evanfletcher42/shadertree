@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libceres-dev libopencv-dev libeigen3-dev libjsoncpp-dev libcxxopts-dev
+      - run: sh setup-dev.sh --no-venv
       - working-directory: reconstruct
         run: |
           cmake --preset linux
@@ -42,8 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
-      - run: pacman -Syu --noconfirm --needed base-devel cmake ceres-solver opencv qt6-base vtk hdf5 eigen jsoncpp cxxopts
       - uses: actions/checkout@v4
+      - run: sh setup-dev.sh --no-venv
       - working-directory: reconstruct
         run: |
           cmake --preset linux

@@ -6,7 +6,7 @@
 
 ### Windows
 
-Install Visual Studio 2022 or 2026 with the "Desktop development with C++" workload, which includes CMake and vcpkg. Then, from a Developer PowerShell:
+Run `powershell -ExecutionPolicy Bypass -File setup-dev.ps1` once. It checks for Visual Studio 2022 or newer with the C++ tools and vcpkg (listed in `reconstruct\.vsconfig`; if anything is missing it prints the install command), sets `VCPKG_ROOT` to Visual Studio's bundled vcpkg unless you already have one, and creates `.venv` (Python 3.12) for the web side and the reconstruction dev tools. Then, from a Developer PowerShell:
 
 ```
 cd reconstruct
@@ -18,32 +18,23 @@ vcpkg builds the dependencies from `vcpkg.json` on the first configure (slow; ca
 
 For a faster debuggable build use `cmake --build --preset windows-relwithdebinfo` (Debug works but the solve is very slow).
 
-### VS Code
+### Ubuntu 24.04 and Arch
 
-Open the repository root and install the recommended extensions (CMake Tools, C/C++, Python). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging), then use the `ledreconstruct` launch configurations, which solve from a directory of cached observation JSONs. On Windows, `VCPKG_ROOT` must be set: start VS Code from a Developer PowerShell (`code .`), or set `VCPKG_ROOT` as a user environment variable pointing at Visual Studio's `VC\vcpkg` directory.
-
-For Python completion on the web side (`stweb/`), create a virtual environment at the repository root, which VS Code picks up automatically: `python -m venv .venv`, then install `stweb/requirements.txt` into it.
-
-### Ubuntu 24.04
+Run `./setup-dev.sh` once. It installs the dependencies with apt or pacman and creates `.venv`. Then:
 
 ```
-sudo apt install cmake g++ libceres-dev libopencv-dev libeigen3-dev libjsoncpp-dev libcxxopts-dev
 cd reconstruct
 cmake --preset linux
 cmake --build --preset linux -j
 ```
 
-### Arch
-
-```
-sudo pacman -S --needed base-devel cmake ceres-solver opencv qt6-base vtk hdf5 eigen jsoncpp cxxopts
-```
-
-Then build as on Ubuntu.
-
 ### SteamOS
 
 Build inside an Arch container: `distrobox create --name arch --image archlinux:latest`, then `distrobox enter arch` and follow the Arch steps.
+
+### VS Code
+
+Open the repository root and install the recommended extensions (CMake Tools, C/C++, Python). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging), then use the `ledreconstruct` launch configurations, which solve from a directory of cached observation JSONs. Python completion for `stweb/` uses the `.venv` from the setup script. On Windows, restart VS Code after the first `setup-dev.ps1` run so it sees `VCPKG_ROOT`.
 
 ### Other platforms
 

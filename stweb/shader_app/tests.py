@@ -1,7 +1,7 @@
 import json
 from django.contrib.auth.models import User
 from django.test import TestCase
-from .models import Shader, ShaderVersion, LedCoordsCfg, PlaybackControl, BannedIP
+from .models import Shader, ShaderVersion, ShaderPrefix, LedCoordsCfg, PlaybackControl, BannedIP
 
 
 def make_shader(**kwargs):
@@ -101,7 +101,12 @@ class EditorPageTests(TestCase):
     def test_new(self):
         resp = self.client.get("/edit/new/")
         self.assertContains(resp, 'data-playseconds="30"')
-        self.assertContains(resp, "[0.0, 1.0, 2.0]")
+        self.assertContains(resp, '<script id="ledcoords" type="application/json">[0.0, 1.0, 2.0]</script>', html=True)
+
+    def test_prefix(self):
+        ShaderPrefix.objects.create(content="#version 300 es")
+        self.assertEqual(ShaderPrefix.program_prefix(), "#version 300 es\n")
+        self.assertContains(self.client.get("/edit/new/"), 'data-shaderprefix="#version 300 es\n"')
 
     def test_existing(self):
         shader = make_shader(title="My shader")

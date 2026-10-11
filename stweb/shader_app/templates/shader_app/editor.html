@@ -10,10 +10,7 @@
   <script src="{% static 'shader_app/ace.js' %}"></script>
   <!-- Include glMatrix Library -->
   <script src="{% static 'shader_app/gl-matrix-min.js' %}"></script>
-  <script>
-    window.positions = {{ ledcoords|safe }};
-    console.log('Positions loaded:', window.positions);
-  </script>
+  {{ ledcoords|json_script:"ledcoords" }}
 
 </head>
 <body>

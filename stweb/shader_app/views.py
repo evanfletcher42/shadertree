@@ -30,10 +30,9 @@ def now_playing(request):
 
 def render_editor(request, context):
     coords_obj = LedCoordsCfg.objects.first()
-    pfx_obj = ShaderPrefix.objects.first()
     context.update({
-        "ledcoords": json.dumps(coords_obj.content if coords_obj else []),
-        "shaderprefix": pfx_obj.content if pfx_obj else "",
+        "ledcoords": coords_obj.content if coords_obj else [],
+        "shaderprefix": ShaderPrefix.program_prefix(),
         "playseconds": settings.SHADER_PLAY_SECONDS
     })
     return render(request, "shader_app/editor.html", context)

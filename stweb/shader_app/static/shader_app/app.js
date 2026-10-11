@@ -21,8 +21,7 @@ const prefixLines = shaderPrefix.split('\n').length;
 
 editor.setValue(data.editortext, -1);  // Set the fetched text as the editor's content
 
-// template embeds LED positions directly into global scope
-const positions = window.positions
+const positions = JSON.parse(document.getElementById('ledcoords').textContent);
 
 // Number of LEDs
 const numLEDs = positions.length / 3;

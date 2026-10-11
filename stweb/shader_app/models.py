@@ -68,6 +68,12 @@ class ShaderPrefix(models.Model):
             raise ValidationError("There can only be one ShaderPrefix instance")
         super().save(*args, **kwargs)
 
+    @staticmethod
+    def program_prefix():
+        """Prepended to every shader body, by both the runner and the editor preview."""
+        pfx_obj = ShaderPrefix.objects.first()
+        return (pfx_obj.content if pfx_obj else "") + "\n"
+
     def __str__(self):
         return "Shader Prefix Configuration"
 

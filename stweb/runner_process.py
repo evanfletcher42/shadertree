@@ -85,15 +85,6 @@ def main():
     last_seen_nonce = 0
 
     while True:
-        # --- load prefix (your existing logic) ---
-        try:
-            pfx_obj = ShaderPrefix.objects.first()
-            prefix_text = pfx_obj.content if pfx_obj else ""
-        except ShaderPrefix.DoesNotExist:
-            print("No shader prefix configured")
-            time.sleep(1)
-            continue
-
         # --- if someone requested a shader, consume it and play it now ---
         try:
             forced_shader, last_seen_nonce = consume_override_if_new(last_seen_nonce)
@@ -140,7 +131,7 @@ def main():
         shader.save()
 
         # --- run shader, interrupt if nonce changes ---
-        program_text = prefix_text + "\n" + shader_text
+        program_text = ShaderPrefix.program_prefix() + shader_text
 
         print("Running:", shader)
 

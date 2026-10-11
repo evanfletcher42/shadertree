@@ -45,12 +45,16 @@ bool BundleAdjuster::LoadCameraCalibrationFromJson(std::string& jsonPath)
 
 	ifs >> calJson;
 
-	if (!calJson.isMember("fx") ||
+	if (!calJson.isMember("width") ||
+		!calJson.isMember("height") ||
+		!calJson.isMember("fx") ||
 		!calJson.isMember("fy") ||
 		!calJson.isMember("cx") ||
 		!calJson.isMember("cy") ||
 		!calJson.isMember("dist"))
 		return false;
+
+	m_imageSize = cv::Size(calJson["width"].asInt(), calJson["height"].asInt());
 
 	m_cameraMat = cv::Mat::eye(cv::Size(3, 3), CV_32FC1);
 	m_cameraMat.at<float>(0, 0) = calJson["fx"].asFloat();
@@ -300,7 +304,7 @@ bool BundleAdjuster::TwoFrameHomography(int nFrame1, int nFrame2, cv::Mat &homog
 
 	// A reasonable camera matrix is expected for findHomography, which expects coordinates in units of pixels.
 	// Outlier rejection seems to misbehave if provided normalized camera coordinates.
-	cv::Mat optimalCameraMat = cv::getOptimalNewCameraMatrix(m_cameraMat, m_distCoefs, cv::Size(1920, 1080), 0);
+	cv::Mat optimalCameraMat = cv::getOptimalNewCameraMatrix(m_cameraMat, m_distCoefs, m_imageSize, 0);
 
 	std::vector< cv::Point2f > frame1PtsUndistorted;
 	std::vector< cv::Point2f > frame2PtsUndistorted;

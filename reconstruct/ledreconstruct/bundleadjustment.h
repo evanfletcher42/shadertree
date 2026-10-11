@@ -107,7 +107,8 @@ private:
 	// Alignment transform.
 	double m_alignedFromWorld[6];
 
-	// Camera calibration.
+	// Camera calibration, valid for images of m_imageSize.
+	cv::Size m_imageSize;
 	cv::Mat m_cameraMat;
 	cv::Mat m_distCoefs;
 	double m_intrinsics[LedObservationResidual::nIntrinsicsTraits];

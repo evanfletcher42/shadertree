@@ -580,13 +580,12 @@ int BundleAdjuster::TriangulateNewPoints()
 			int nFrame1 = frames[i1];
 			int nFrame2 = frames[i2];
 
+			// Points are undistorted to normalized coordinates, so the projection matrices are [R|t] without K.
 			cv::Mat camFromWorld1;
 			composeRT(m_cameraFromWorldPoses[nFrame1].data(), camFromWorld1);
-			cv::Mat proj1 = m_cameraMat * camFromWorld1;
 
 			cv::Mat camFromWorld2;
 			composeRT(m_cameraFromWorldPoses[nFrame2].data(), camFromWorld2);
-			cv::Mat proj2 = m_cameraMat * camFromWorld2;
 
 			// Undistort both observations of this LED.
 			std::vector<cv::Point2f> pDistorted1;
@@ -603,7 +602,7 @@ int BundleAdjuster::TriangulateNewPoints()
 
 			cv::Mat pInWorldHomogenous;
 
-			cv::triangulatePoints(proj1, proj2, pUndistorted1, pUndistorted2, pInWorldHomogenous);
+			cv::triangulatePoints(camFromWorld1, camFromWorld2, pUndistorted1, pUndistorted2, pInWorldHomogenous);
 
 			// Initialize point
 			m_ledPoints[nLedIdx][0] = pInWorldHomogenous.at<float>(0) / pInWorldHomogenous.at<float>(3);

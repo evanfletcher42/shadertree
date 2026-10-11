@@ -927,8 +927,8 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	options.minimizer_progress_to_stdout = true;
 
-	// TBD: This is a bundle adjustment problem - we may be able to save a bit of preprocessing time by specifying
-	//		an explicit linear_solver_ordering that splits all points and all cameras into separate groups.
+	// No explicit linear_solver_ordering: Ceres orders a user ordering's groups by block address, so runs stop being
+	// reproducible, and it saved nothing measurable over the automatic one.
 
 	// TBD: Convergence tuning...
 

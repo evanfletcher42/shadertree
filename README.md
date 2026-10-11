@@ -2,7 +2,7 @@
 
 ## Building the reconstruction solver
 
-`reconstruct/` builds `ledreconstruct` with CMake (3.22+) and a C++17 compiler. Dependencies: Ceres 2.2+, Eigen 3.4+, OpenCV 4.6+ (5.x works; FFmpeg is needed for video decode), jsoncpp and cxxopts 3.1+. If Ceres was built with LAPACK, the solver uses it; back it with an optimized BLAS such as OpenBLAS, since reference BLAS can be slower than Ceres' built-in Eigen path.
+`reconstruct/` builds `ledreconstruct` with CMake (3.22+) and a C++17 compiler. Dependencies: Ceres 2.2+, Eigen 3.4+, OpenCV 4.6+ (5.x works; FFmpeg is needed for video decode), jsoncpp and cxxopts 3.1+.
 
 ### Windows
 
@@ -19,7 +19,7 @@ vcpkg builds the dependencies from `vcpkg.json` on the first configure (slow; ca
 ### Ubuntu 24.04
 
 ```
-sudo apt install cmake g++ libceres-dev libopencv-dev libeigen3-dev libjsoncpp-dev libcxxopts-dev libopenblas-dev
+sudo apt install cmake g++ libceres-dev libopencv-dev libeigen3-dev libjsoncpp-dev libcxxopts-dev
 cd reconstruct
 cmake --preset linux
 cmake --build --preset linux -j
@@ -28,7 +28,7 @@ cmake --build --preset linux -j
 ### Arch
 
 ```
-sudo pacman -S --needed base-devel cmake ceres-solver opencv qt6-base vtk hdf5 eigen jsoncpp cxxopts blas-openblas
+sudo pacman -S --needed base-devel cmake ceres-solver opencv qt6-base vtk hdf5 eigen jsoncpp cxxopts
 ```
 
 Then build as on Ubuntu.

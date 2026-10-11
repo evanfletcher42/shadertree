@@ -107,8 +107,6 @@ int main(int argc, char** argv)
         return 1;
     };
 
-    printf("Dense linear algebra: %s\n", ceres::IsDenseLinearAlgebraLibraryTypeAvailable(ceres::LAPACK) ? "LAPACK" : "Eigen");
-
     StageClock_t::time_point reconstructStart = StageClock_t::now();
     if (!bundleAdjuster.Reconstruct())
         return 1;

@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include <ceres/ceres.h>
@@ -41,7 +42,7 @@ int main(int argc, char** argv)
         cxxopts::ParseResult result = options.parse(argc, argv);
 
         if (result.count("videos") == result.count("observations"))
-            throw cxxopts::OptionParseException("specify exactly one of --videos or --observations");
+            throw std::invalid_argument("specify exactly one of --videos or --observations");
 
         if (result.count("videos"))
             videoDir = result["videos"].as<std::string>();
@@ -61,7 +62,7 @@ int main(int argc, char** argv)
         if (result.count("output"))
             outJsonPath = result["output"].as<std::string>();
         else if (videoDir.empty())
-            throw cxxopts::option_required_exception("output");
+            throw std::invalid_argument("--output is required");
 
         nThreads = result["threads"].as<int>();
         bFlip = result.count("flip") > 0;
@@ -72,9 +73,9 @@ int main(int argc, char** argv)
         if (result.count("calibration"))
             calPath = result["calibration"].as<std::string>();
         else if (!outJsonPath.empty())
-            throw cxxopts::option_required_exception("calibration");
+            throw std::invalid_argument("--calibration is required");
     }
-    catch (cxxopts::OptionException& e)
+    catch (const std::exception& e)
     {
         printf("%s\n\n%s", e.what(), options.help().c_str());
         return 1;

@@ -93,8 +93,7 @@ bool BundleAdjuster::LoadCameraCalibrationFromJson(std::string& jsonPath)
 
 bool BundleAdjuster::InitializeBA()
 {
-	// Init from the pair of frames sharing the most LEDs whose motion a homography can't explain (parallax, so
-	// triangulation works).  Pairs are tried most-shared first; frame 1 (the origin) is the one with more LEDs.
+	// Most-shared pairs first; frame 1 (the origin) is the member with more LEDs.
 	StageClock_t::time_point pairSearchStart = StageClock_t::now();
 	int nFrames = (int)m_pObservations->size();
 	std::vector< std::array<int, 3> > pairs;  // shared LEDs, frame 1, frame 2
@@ -230,7 +229,6 @@ bool BundleAdjuster::Reconstruct()
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
 	}
 
-	// Final BA, intrinsics included.
 
 	printf("\nReconstruct: Solving final BA...\n");
 	m_visualizer.SetTitle("Solving final BA...");
@@ -629,8 +627,8 @@ int BundleAdjuster::TriangulateNewPoints()
 
 int BundleAdjuster::InterpolateNewPoints()
 {
-	// Strings are nearly straight between neighbors: across a gap of 3, 90% of LEDs land within 0.9 LED spacings of
-	// truth (step 8 tuning).  Never across strands, and never past a strand's last solved LED (its tail is real).
+	// Strings are nearly straight between neighbors: across a gap of 3, 90% of LEDs land within 0.9 LED spacings.
+	// Never across strands, never past a strand's last solved LED (its tail is real).
 	std::vector<double> pitches;
 	for (int i = 0; i + 1 < k_nMaxLeds; i++)
 	{
@@ -934,8 +932,7 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	options.minimizer_progress_to_stdout = true;
 
-	// No explicit linear_solver_ordering: Ceres orders a user ordering's groups by block address, so runs stop being
-	// reproducible, and it saved nothing measurable over the automatic one.
+	// No explicit linear_solver_ordering: Ceres orders user groups by block address, which breaks reproducibility.
 
 	// TBD: Convergence tuning...
 

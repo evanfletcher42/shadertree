@@ -145,7 +145,7 @@ bool ObservationSet::LoadFromVideos( const std::string &videoDir, const std::str
 	std::vector< std::vector< PointObservation_t > > views( nVideos );
 	std::vector< char > decoded( nVideos, 0 );
 
-	// One video per thread; each decode is single-threaded apart from the video decoder itself.
+	// One video per thread
 	std::atomic< int > nNext( 0 );
 	auto worker = [&]()
 	{

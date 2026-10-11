@@ -11,10 +11,9 @@ struct PointObservation_t
 	// Image location (x = col, y = row)
 	cv::Point2f p;
 
-	// Decoded LED index
+	// Detected LED index
 	int nLedIdx = -1;
 
-	// Blob size
 	int nPixels = 0;
 };
 

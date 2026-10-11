@@ -37,7 +37,6 @@ inline void CStageTimes::Print( const char *pTitle ) const
 	}
 }
 
-// Adds the time between construction and destruction to one stage.
 class CScopedStageTimer
 {
 public:

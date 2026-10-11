@@ -22,8 +22,7 @@ public:
 	// Load a camera calibration from a JSON file.
 	bool LoadCameraCalibrationFromJson(std::string& jsonPath);
 
-	// Initialize the bundle adjustment problem from the pair of frames sharing the most LEDs whose motion
-	// can't be explained by a homography, via TwoFramePlanarInit.
+	// Initialize from the frame pair sharing the most LEDs with parallax (motion no homography explains).
 	bool InitializeBA();
 
 	// Attempt to reconstruct everything.  Runs the entire process.
@@ -51,7 +50,7 @@ public:
 	// Initialize uninitialized LEDs seen by 2+ posed frames, by DLT over all of them.
 	int TriangulateNewPoints();
 
-	// Fill short gaps within a strand by linear interpolation between solved LEDs (m_pointsInterpolated).
+	// Fill short in-strand gaps by linear interpolation between solved LEDs.
 	int InterpolateNewPoints();
 
 	// A frame's observation of an LED, or nullptr.
@@ -85,9 +84,8 @@ public:
 	// Output a file containing LED locations, after alignment.
 	bool WriteAlignedReconstructionToJson(const std::string& outPath);
 
-	// Output site coordinates (stweb LedCoordsCfg): Y up with the tree's wide end at the bottom (bFlip inverts that
-	// choice), y in [-1, 1], centered on the tree's axis.  Writes <basePath>.ledcoords.json (flat x,y,z per address,
-	// unmapped = 0,0,0; paste into admin) and <basePath>.leds.json ([{addr, x, y, z}] for mapped LEDs).
+	// LedCoordsCfg coordinates: Y up, wide end down (bFlip inverts), y in [-1, 1], tree axis at x = z = 0.
+	// <basePath>.ledcoords.json: flat x,y,z per address, unmapped 0,0,0.  <basePath>.leds.json: [{addr, x, y, z, interpolated}].
 	bool WriteSiteCoordinatesToJson(const std::string& basePath, bool bFlip);
 
 	// The init pair must share at least this many LEDs.
@@ -100,7 +98,7 @@ public:
 	// A new camera's PnP solve must have at least this fraction of inliers.
 	static constexpr double k_flMinPnPInlierFrac = 0.8;
 
-	// InterpolateNewPoints: longest gap filled, and the most a gap's end-to-end distance may exceed (gap + 1) x pitch.
+	// Interpolation: longest gap filled; max end-to-end distance / ((gap + 1) * pitch).
 	static constexpr int k_nMaxInterpGap = 3;
 	static constexpr double k_flMaxInterpChordRatio = 1.1;
 
@@ -126,7 +124,7 @@ public:
 	// Marks whether a given LED has been initialized.
 	bool m_pointsInitialized[k_nMaxLeds];
 
-	// Filled in by InterpolateNewPoints; not initialized, so never part of a solve or --output.
+	// Interpolated, not solved: never in a solve or --output.
 	bool m_pointsInterpolated[k_nMaxLeds];
 
 private:
@@ -145,7 +143,6 @@ private:
 	cv::Mat m_cameraMat;
 	cv::Mat m_distCoefs;
 	double m_intrinsics[LedObservationResidual::nIntrinsicsTraits];
-
 
 	// Visualizations
 	CPointsVisualizer m_visualizer;

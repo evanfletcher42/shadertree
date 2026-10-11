@@ -300,7 +300,7 @@ static int DecodePixel( uint32_t nCode, uint8_t nFirstColor )
 	if ( nLedIdx >= k_nMaxLeds )
 		return -1;
 
-	// ledcodes.glsl starts each LED's color cycle at idx % 3.
+	// Each LED's color cycle starts at idx % 3.
 	if ( nLedIdx % 3 != nFirstColor )
 		return -1;
 

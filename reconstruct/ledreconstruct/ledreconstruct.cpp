@@ -9,8 +9,6 @@
 #include <glog/logging.h>
 
 #include "bundleadjustment.h"
-#include "observationset.h"
-#include "stagetimes.h"
 
 int main(int argc, char** argv)
 {
@@ -129,7 +127,7 @@ int main(int argc, char** argv)
         bundleAdjuster.WriteSiteCoordinatesToJson(sitePath, bFlip);
     }
 
-    // Redirected short runs lost their last lines without this
+    // Short redirected runs otherwise lose their last lines
     fflush(stdout);
     return 0;
 }

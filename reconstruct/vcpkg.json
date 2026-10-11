@@ -20,5 +20,8 @@
 				{ "name": "gtk", "platform": "linux" }
 			]
 		}
+	],
+	"overrides": [
+		{ "name": "eigen3", "version": "3.4.1", "port-version": 1 }
 	]
 }

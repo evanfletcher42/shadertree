@@ -216,8 +216,9 @@ bool BundleAdjuster::Reconstruct()
 
 		printf("Solving poses + points for new points...\n");
 		m_visualizer.SetTitle("Solving points and poses (new points)...");
+		// Refine intrinsics here too, once each round's new points are in.
 		ceres::Problem problem3;
-		SetupBundleAdjustmentProblem(problem3, false, true, true);
+		SetupBundleAdjustmentProblem(problem3, true, true, true);
 		SolveProblem(problem3);
 
 		CullReprojectionOutliers();
@@ -225,8 +226,7 @@ bool BundleAdjuster::Reconstruct()
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
 	}
 
-	// Do one final BA solve where the intrinsics of the camera are refined.
-	// (Typically BA problems would do this sooner.  However, LED coverage can be somewhat sparse compared to natural features.) 
+	// Final BA, intrinsics included.
 
 	printf("\nReconstruct: Solving final BA...\n");
 	m_visualizer.SetTitle("Solving final BA...");

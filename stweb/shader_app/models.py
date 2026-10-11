@@ -59,7 +59,9 @@ class ShaderPrefix(models.Model):
     content = models.TextField("prefix", default=
         "#version 300 es\n"
         "layout(location = 0) in vec3 iPos;\n"
+        "layout(location = 1) in uint iIdx;\n"
         "uniform float iTime;\n"
+        "uniform int iFrame;\n"
         "out vec3 outColor;"
         )
 
@@ -106,6 +108,11 @@ class LedCoordsCfg(models.Model):
     Contains the positions of each LED in the model, as a json array.
     """
     content = models.JSONField()
+
+    def led_count(self):
+        """Mapped LEDs; unmapped addresses are (0,0,0)."""
+        c = self.content
+        return sum(1 for i in range(0, len(c) - 2, 3) if c[i] or c[i + 1] or c[i + 2])
     
     def save(self, *args, **kwargs):
         if not self.pk and LedCoordsCfg.objects.exists():

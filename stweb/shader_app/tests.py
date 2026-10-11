@@ -1,6 +1,7 @@
 import json
 from django.contrib.auth.models import User
 from django.test import TestCase
+from .views import prefix_doc
 from .models import Shader, ShaderVersion, ShaderPrefix, LedCoordsCfg, PlaybackControl, BannedIP
 
 
@@ -135,3 +136,19 @@ class AdminSetLatestTests(TestCase):
 
         self.client.post("/admin/shader_app/shaderversion/", {"action": "set_as_latest_version", "_selected_action": [old.id]})
         self.assertEqual(shader.versions.count(), 4)
+
+
+class DocsFromDataTests(TestCase):
+    def test_prefix_doc(self):
+        doc = prefix_doc(ShaderPrefix._meta.get_field("content").default + "\n").split("\n")
+        self.assertEqual(doc[0], "#version 300 es")
+        self.assertRegex(doc[3], r"^uniform float iTime; +// seconds since the shader started; each shader runs 30 s on the tree$")
+        self.assertEqual(len({line.index("//") for line in doc[1:]}), 1)
+
+    def test_led_count(self):
+        LedCoordsCfg.objects.create(content=[0, 0, 0, 0.5, 0, 0, 0, 0, -1, 0, 0, 0])
+        self.assertEqual(LedCoordsCfg.objects.get().led_count(), 2)
+        self.assertContains(self.client.get("/about"), "made out of 2 addressable LEDs")
+
+    def test_index_period(self):
+        self.assertContains(self.client.get("/"), "every 30 seconds")

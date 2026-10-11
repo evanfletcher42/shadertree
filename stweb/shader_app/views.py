@@ -9,6 +9,7 @@ from django.conf import settings
 from .utils import get_client_ip
 from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, PlaybackControl
 import json
+import re
 
 def index(request):
     template = loader.get_template("shader_app/index.html")
@@ -17,7 +18,8 @@ def index(request):
     shader_list = list(shaders)  # QuerySet->List
 
     context = {
-        "shaders": shader_list
+        "shaders": shader_list,
+        "playseconds": settings.SHADER_PLAY_SECONDS
     }
     return HttpResponse(template.render(context, request))
 
@@ -28,11 +30,33 @@ def now_playing(request):
 
     return HttpResponse(template.render(context, request))
 
+PREFIX_DOCS = {
+    "iPos": "LED 3D position: +y up, bottom center ~(0,-1,0), tip ~(0,1,0)",
+    "iIdx": "LED address in the string (raw hardware addresses; not contiguous)",
+    "iTime": "seconds since the shader started; each shader runs {playseconds} s on the tree",
+    "iFrame": "frame counter, from 0",
+    "outColor": "output: RGB color, 0 to 1",
+}
+
+
+def prefix_doc(prefix):
+    """The prefix with a comment on each declaration found in PREFIX_DOCS."""
+    lines = prefix.splitlines()
+    width = max((len(line) for line in lines), default=0)
+    out = []
+    for line in lines:
+        match = re.search(r"(\w+)\s*;\s*$", line)
+        doc = PREFIX_DOCS.get(match.group(1)) if match else None
+        out.append(f"{line.ljust(width)}  // {doc.format(playseconds=settings.SHADER_PLAY_SECONDS)}" if doc else line)
+    return "\n".join(out)
+
+
 def render_editor(request, context):
     coords_obj = LedCoordsCfg.objects.first()
     context.update({
         "ledcoords": coords_obj.content if coords_obj else [],
         "shaderprefix": ShaderPrefix.program_prefix(),
+        "prefixdoc": prefix_doc(ShaderPrefix.program_prefix()),
         "playseconds": settings.SHADER_PLAY_SECONDS,
         "ledgamma": settings.LED_GAMMA
     })
@@ -63,9 +87,11 @@ def edit_existing(request, shader_ident):
 
 
 def about(request):
-    template = loader.get_template("shader_app/about.html")
-    context = {}
-    return HttpResponse(template.render(context, request))
+    coords_obj = LedCoordsCfg.objects.first()
+    return render(request, "shader_app/about.html", {
+        "ledcount": coords_obj.led_count() if coords_obj else 0,
+        "playseconds": settings.SHADER_PLAY_SECONDS
+    })
 
 
 @require_POST

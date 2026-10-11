@@ -1055,7 +1055,7 @@ div#editorHeader
 
 div#editorHeader.expanded
 {
-    height: 122px;
+    height: auto;
 }
 
 div#editorHeaderBar
@@ -1087,10 +1087,7 @@ div#editorHeaderArrow.expanded
 
 div#editorHeaderText
 {
-    font-family:consolas,monospace;
-    top: 12px;
-    left: 24px;
-    position: absolute;
+    margin-top: 20px;
 }
 
 

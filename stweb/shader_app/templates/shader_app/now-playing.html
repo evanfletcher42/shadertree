@@ -3,10 +3,11 @@
 <html lang="en">
 
 <head>
+    <meta charset="UTF-8">
+    <title>Shadertree: Now Playing</title>
     <link rel="stylesheet" href="{% static 'shader_app/styles.css' %}">
     <link rel="shortcut icon" type="image/png" href="{% static 'shader_app/favicon.ico' %}" >
     <style>
-        /* Custom layout based on provided styles */
         .container {
             display: flex;
             flex-direction: column;
@@ -42,7 +43,6 @@
 
         .bottom-section p {
             font-size: 4em;
-            margin-bottom: em;
         }
 
         .bottom-section a {
@@ -70,7 +70,6 @@
         <div class="section bottom-section">
             <p>Run Your Own Shader On This Tree:</p>
 
-            <!-- NEW: Play-now controls -->
             <div style="margin-top: 0.75em;">
                 <select id="shaderSelect" style="font-size: 2.5em; padding: 0.2em 0.4em; max-width: 80vw; width:auto; background-color:#A0A0A0">
                     <option value="">Select a shader…</option>
@@ -80,10 +79,9 @@
                 </button>
             </div>
 
-            <a href="#">shadertree.valve.org</a>
+            <a href="/">shadertree.valve.org</a>
         </div>
     </div>
-</body>
 
 <script>
     function getCookie(name) {
@@ -154,8 +152,6 @@
         try {
             const csrftoken = getCookie('csrftoken');
 
-            // TODO: adjust this URL to match your play-now endpoint.
-            // Example: /api/play_now/<ident>/
             const response = await fetch(`/api/play_now/${encodeURIComponent(ident)}/`, {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -170,7 +166,6 @@
                 throw new Error(text);
             }
 
-            // Optional: refresh Now Playing soon after
             setTimeout(updateNowPlaying, 250);
         } catch (error) {
             console.error('Failed to play selected shader:', error);
@@ -185,11 +180,7 @@
         setInterval(loadShaderDropdown, 5000);
 
         document.getElementById('playNowBtn').addEventListener('click', playSelectedShader);
-
-        // If you want it to play immediately when chosen (no button), uncomment:
-        // document.getElementById('shaderSelect').addEventListener('change', playSelectedShader);
     });
 </script>
-
-
+</body>
 </html>

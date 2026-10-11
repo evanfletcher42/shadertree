@@ -21,6 +21,18 @@ const prefixLines = shaderPrefix.split('\n').length;
 
 editor.setValue(data.editortext, -1);  // Set the fetched text as the editor's content
 
+const prefixView = ace.edit("editorHeaderText", {
+    mode: "ace/mode/glsl",
+    theme: "ace/theme/chrome",
+    readOnly: true,
+    maxLines: Infinity,
+    showGutter: false,
+    highlightActiveLine: false,
+    showPrintMargin: false
+});
+prefixView.setValue(data.prefixdoc, -1);
+prefixView.renderer.$cursorLayer.element.style.display = "none";
+
 const positions = JSON.parse(document.getElementById('ledcoords').textContent);
 
 // Number of LEDs

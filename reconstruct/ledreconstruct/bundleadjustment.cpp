@@ -11,8 +11,9 @@
 
 #include "bundleadjustment.h"
 
-BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pObservations)
+BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pObservations, uint32_t nSeed)
 	: m_pObservations(pObservations)
+	, m_gen(nSeed)
 {
 	// No points are initialized (yet)
 	memset(m_ledPoints, 0, sizeof(m_ledPoints));
@@ -28,9 +29,6 @@ BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pOb
 	// User should load camera calibration from JSON.  
 	m_cameraMat = cv::Mat::zeros(3, 3, CV_32FC1);
 	m_distCoefs = cv::Mat::zeros(1, 5, CV_32FC1);
-
-	// Seed the RNG.
-	m_gen = std::mt19937(m_rd());
 }
 
 BundleAdjuster::~BundleAdjuster()

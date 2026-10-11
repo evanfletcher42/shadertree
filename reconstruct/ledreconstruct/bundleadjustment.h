@@ -14,7 +14,7 @@
 class BundleAdjuster
 {
 public:
-	BundleAdjuster( std::vector< std::vector< PointObservation_t > > *pObservations );
+	BundleAdjuster( std::vector< std::vector< PointObservation_t > > *pObservations, uint32_t nSeed );
 
 	~BundleAdjuster();
 
@@ -113,7 +113,6 @@ private:
 	double m_intrinsics[LedObservationResidual::nIntrinsicsTraits];
 
 	// RNG
-	std::random_device m_rd;
 	std::mt19937 m_gen;
 
 	// Visualizations

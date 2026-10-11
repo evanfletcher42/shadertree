@@ -5,6 +5,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.db import transaction
 from django.db.models import F
+from django.conf import settings
 from .utils import get_client_ip
 from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, PlaybackControl
 import json
@@ -59,7 +60,8 @@ def edit_new(request):
         "shaderplayable": True,
         "ledcoords": coords_str,
         "shaderprefix": prefix_text,
-        "editortext": editor_text
+        "editortext": editor_text,
+        "playseconds": settings.SHADER_PLAY_SECONDS
     } 
     
     return HttpResponse(template.render(context, request))
@@ -105,7 +107,8 @@ def edit_existing(request, shader_ident):
         "shaderplayable": shader.is_playable,
         "ledcoords": coords_str,
         "shaderprefix": prefix_text,
-        "editortext": editor_text
+        "editortext": editor_text,
+        "playseconds": settings.SHADER_PLAY_SECONDS
     }
 
     return HttpResponse(template.render(context, request))

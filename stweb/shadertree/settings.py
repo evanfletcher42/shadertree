@@ -124,3 +124,6 @@ STATIC_ROOT = Path.joinpath(BASE_DIR, "static")
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# How long each shader runs on the tree; the editor preview loops over the same period
+SHADER_PLAY_SECONDS = 30

@@ -595,6 +595,7 @@ div#player
     padding: 0;
     margin: 0;
     cursor: pointer;
+    touch-action: none;
     border-radius: 4px 4px 0px 0px;
 }
 .playerCanvas:focus
@@ -623,11 +624,15 @@ div#player
 }
 .playerBar > div:nth-child(2)
 {
-    display:flex;justify-content:space-between;gap:1rem;;
+    display:flex;flex: 1 1 auto;
+}
+.playerBar > div:nth-child(2) > input
+{
+    width: 100%;
 }
 .playerBar > div:nth-child(3)
 {
-    display:flex;gap:16px;flex: 1 0 auto;justify-content:right
+    display:flex;gap:16px;justify-content:right;font-variant-numeric: tabular-nums;
 }
 
 div#noWebGL

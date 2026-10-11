@@ -37,6 +37,20 @@
             <div class="block0">
                 <div id="player">
                     <canvas id="glCanvas" class="playerCanvas"></canvas>
+                    <div class="playerBar">
+                        <div>
+                            <button id="restartButton" title="Restart from iTime = 0">Restart</button>
+                            <button id="pauseButton">Pause</button>
+                        </div>
+                        <div>
+                            <input type="range" id="timeline" min="0" max="{{ playseconds }}" step="0.01" value="0" title="Each shader runs for {{ playseconds }} s on the tree">
+                        </div>
+                        <div>
+                            <span id="timeLabel"></span>
+                            <span id="frameLabel"></span>
+                            <label title="Wrap to 0 after {{ playseconds }} s, like the tree"><input type="checkbox" id="loopToggle" checked> Loop</label>
+                        </div>
+                    </div>
                 </div>
                 <div id="shaderInfo">
                     <div>
@@ -93,6 +107,7 @@
     data-shaderprefix="{{ shaderprefix }}"
     data-editortext="{{ editortext }}"
     data-csrftoken="{{ csrf_token }}"
+    data-playseconds="{{ playseconds }}"
     ></script>
 </body>
 </html>

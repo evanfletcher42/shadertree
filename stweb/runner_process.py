@@ -77,6 +77,7 @@ def main():
     init_django()
     sqlite_enable_wal()
 
+    from django.conf import settings
     from shader_app.models import Shader, ShaderVersion, ShaderPrefix, LedCoordsCfg
     from shader_app.playback import get_ctrl_values, consume_override_if_new
 
@@ -139,7 +140,6 @@ def main():
         shader.save()
 
         # --- run shader, interrupt if nonce changes ---
-        shadertime = 30
         program_text = prefix_text + "\n" + shader_text
 
         print("Running:", shader)
@@ -156,7 +156,7 @@ def main():
 
             return nonce != last_seen_nonce
 
-        result = runshader_interruptible(program_text, shadertime, should_interrupt, poll_seconds=0.1)
+        result = runshader_interruptible(program_text, settings.SHADER_PLAY_SECONDS, should_interrupt, poll_seconds=0.1)
         if not result["interrupted"] and not result["timeout"]:
             print(f"runshader exited early (rc={result['return_code']}): {shader}\n{result['stderr']}", flush=True)
             time.sleep(1)

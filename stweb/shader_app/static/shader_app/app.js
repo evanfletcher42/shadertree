@@ -292,7 +292,7 @@ function captureColors(tfProgram) {
     // Set uniforms
     const iTimeLocation = gl.getUniformLocation(tfProgram, 'iTime');
     if (iTimeLocation != null) {
-        gl.uniform1f(iTimeLocation, (performance.now() - startTime) / 1000.0);
+        gl.uniform1f(iTimeLocation, playTime);
     }
 
     const frameIdxLocation = gl.getUniformLocation(tfProgram, 'iFrame');
@@ -324,8 +324,6 @@ function captureColors(tfProgram) {
 
     // Clean up the temporary VAO
     gl.deleteVertexArray(tfCaptureVAO);
-
-    frameIdx++;
 }
 
 // ------------------------
@@ -333,8 +331,59 @@ function captureColors(tfProgram) {
 // ------------------------
 
 let tfProgram; // Transform Feedback Program
-let startTime = performance.now();
+
+// ------------------------
+// Playback
+// ------------------------
+
+const playSeconds = parseFloat(data.playseconds);
+const pauseButton = document.getElementById('pauseButton');
+const timeline = document.getElementById('timeline');
+const timeLabel = document.getElementById('timeLabel');
+const frameLabel = document.getElementById('frameLabel');
+const loopToggle = document.getElementById('loopToggle');
+
+let playTime = 0;
 let frameIdx = 0;
+let lastNow = performance.now();
+let isPaused = false;
+let isScrubbing = false;
+
+function restartPlayback() {
+    playTime = 0;
+    frameIdx = 0;
+}
+
+function advancePlayback() {
+    const now = performance.now();
+    const dt = (now - lastNow) / 1000.0;
+    lastNow = now;
+    if (isPaused || isScrubbing)
+        return;
+
+    playTime += dt;
+    if (loopToggle.checked && playTime >= playSeconds)
+        restartPlayback();
+}
+
+function updatePlayerBar() {
+    if (!isScrubbing)
+        timeline.value = Math.min(playTime, playSeconds);
+    timeLabel.textContent = playTime.toFixed(2) + ' s';
+    frameLabel.textContent = 'frame ' + frameIdx;
+}
+
+document.getElementById('restartButton').addEventListener('click', restartPlayback);
+
+pauseButton.addEventListener('click', () => {
+    isPaused = !isPaused;
+    pauseButton.textContent = isPaused ? 'Play' : 'Pause';
+});
+
+timeline.addEventListener('pointerdown', () => { isScrubbing = true; });
+timeline.addEventListener('pointerup', () => { isScrubbing = false; });
+timeline.addEventListener('pointercancel', () => { isScrubbing = false; });
+timeline.addEventListener('input', () => { playTime = parseFloat(timeline.value); });
 
 let bUserShaderCompiles = false;
 
@@ -369,10 +418,15 @@ function render() {
     // Enable depth testing
     gl.enable(gl.DEPTH_TEST);
 
+    advancePlayback();
+
     // Capture colors using Transform Feedback
     if (tfProgram) {
         captureColors(tfProgram);
     }
+    updatePlayerBar();
+    if (!isPaused && !isScrubbing)
+        frameIdx++;
 
     // Use render program
     gl.useProgram(renderProgram);
@@ -425,42 +479,56 @@ function resizeCanvasToDisplaySize(canvas) {
 let cameraDistance = 5.0;
 let rotationX = 0;
 let rotationY = 0;
-let isDragging = false;
-let lastMouseX;
-let lastMouseY;
 
-// Mouse events for rotation
-canvas.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
+// Active pointers (mouse or touches): one drags to orbit, two pinch to zoom
+const pointers = new Map();
+let lastPinchDist = 0;
+
+function zoomCamera(delta) {
+    cameraDistance = Math.max(0.1, Math.min(10.0, cameraDistance + delta));
+}
+
+function pinchDistance() {
+    const p = Array.from(pointers.values());
+    return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2)
+        lastPinchDist = pinchDistance();
 });
 
-canvas.addEventListener('mousemove', (e) => {
-    if (isDragging) {
-        const deltaX = e.clientX - lastMouseX;
-        const deltaY = e.clientY - lastMouseY;
-        rotationY += deltaX * 0.005;
-        rotationX += deltaY * 0.005;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
+canvas.addEventListener('pointermove', (e) => {
+    const p = pointers.get(e.pointerId);
+    if (!p)
+        return;
+
+    if (pointers.size === 1) {
+        rotationY += (e.clientX - p.x) * 0.005;
+        rotationX += (e.clientY - p.y) * 0.005;
+    }
+    p.x = e.clientX;
+    p.y = e.clientY;
+
+    if (pointers.size === 2) {
+        const dist = pinchDistance();
+        zoomCamera((lastPinchDist - dist) * 0.02);
+        lastPinchDist = dist;
     }
 });
 
-canvas.addEventListener('mouseup', () => {
-    isDragging = false;
-});
+function releasePointer(e) {
+    pointers.delete(e.pointerId);
+}
+canvas.addEventListener('pointerup', releasePointer);
+canvas.addEventListener('pointercancel', releasePointer);
 
-canvas.addEventListener('mouseleave', () => {
-    isDragging = false;
-});
-
-// Wheel event for zoom
 canvas.addEventListener('wheel', (e) => {
-    event.preventDefault();
-    cameraDistance += e.deltaY * 0.01;
-    cameraDistance = Math.max(0.1, Math.min(10.0, cameraDistance));
-});
+    e.preventDefault();
+    zoomCamera(e.deltaY * 0.01);
+}, { passive: false });
 
 // ------------------------
 // Shader Save & Delete

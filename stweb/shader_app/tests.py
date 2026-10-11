@@ -146,7 +146,7 @@ class DocsFromDataTests(TestCase):
         self.assertEqual(len({line.index("//") for line in doc[1:]}), 1)
 
     def test_led_count(self):
-        LedCoordsCfg.objects.create(content=[0, 0, 0, 0.5, 0, 0, 0, 0, -1, 0, 0, 0])
+        LedCoordsCfg.objects.create(content=[0, -0.48, 0, 0.5, 0, 0, 0, 0, -1, 0, -0.48, 0])
         self.assertEqual(LedCoordsCfg.objects.get().led_count(), 2)
         self.assertContains(self.client.get("/about"), "made out of 2 addressable LEDs")
 

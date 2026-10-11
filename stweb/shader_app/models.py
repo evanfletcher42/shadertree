@@ -1,3 +1,4 @@
+from collections import Counter
 from django.db import models
 from django.utils.crypto import get_random_string
 from django.core.exceptions import ValidationError
@@ -110,9 +111,10 @@ class LedCoordsCfg(models.Model):
     content = models.JSONField()
 
     def led_count(self):
-        """Mapped LEDs; unmapped addresses are (0,0,0)."""
+        """Mapped LEDs. Unmapped addresses all share one placeholder position ((0,0,0) from the solver, (0,-0.48,0) in the 2025 data)."""
         c = self.content
-        return sum(1 for i in range(0, len(c) - 2, 3) if c[i] or c[i + 1] or c[i + 2])
+        counts = Counter(tuple(c[i:i + 3]) for i in range(0, len(c) - 2, 3))
+        return sum(1 for n in counts.values() if n == 1)
     
     def save(self, *args, **kwargs):
         if not self.pk and LedCoordsCfg.objects.exists():

@@ -19,8 +19,6 @@ editor.session.setMode("ace/mode/glsl");
 const shaderPrefix = data.shaderprefix;
 const prefixLines = shaderPrefix.split('\n').length;
 
-editor.setValue(data.editortext, -1);  // Set the fetched text as the editor's content
-
 const prefixView = ace.edit("editorHeaderText", {
     mode: "ace/mode/glsl",
     theme: "ace/theme/chrome",
@@ -30,8 +28,11 @@ const prefixView = ace.edit("editorHeaderText", {
     highlightActiveLine: false,
     showPrintMargin: false
 });
-prefixView.setValue(data.prefixdoc, -1);
+prefixView.setValue(shaderPrefix.trimEnd(), -1);
 prefixView.renderer.$cursorLayer.element.style.display = "none";
+
+editor.setValue(data.editortext, -1);  // Set the fetched text as the editor's content
+
 
 const positions = JSON.parse(document.getElementById('ledcoords').textContent);
 

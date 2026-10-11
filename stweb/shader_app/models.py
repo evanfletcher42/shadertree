@@ -59,11 +59,11 @@ class ShaderPrefix(models.Model):
     """
     content = models.TextField("prefix", default=
         "#version 300 es\n"
-        "layout(location = 0) in vec3 iPos;\n"
-        "layout(location = 1) in uint iIdx;\n"
-        "uniform float iTime;\n"
-        "uniform int iFrame;\n"
-        "out vec3 outColor;"
+        "layout(location = 0) in vec3 iPos;  // LED 3D position: +y up, bottom center ~(0,-1,0), tip ~(0,1,0)\n"
+        "layout(location = 1) in uint iIdx;  // LED address in the string (raw hardware addresses; not contiguous)\n"
+        "uniform float iTime;                // seconds since the shader started\n"
+        "uniform int iFrame;                 // frame counter, from 0\n"
+        "out vec3 outColor;                  // output: RGB color, 0 to 1"
         )
 
     def save(self, *args, **kwargs):

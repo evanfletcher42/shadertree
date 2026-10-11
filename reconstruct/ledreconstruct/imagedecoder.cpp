@@ -84,6 +84,8 @@ static uint8_t ClassifyColor( const uint8_t *pBgr )
 
 
 // Per-pixel color classes of a frame, 2 bits each, 4 pixels per byte in row-major order.
+// Packed because the scan keeps one per frame (sync isn't known until the scan ends) for every video in flight:
+// ~90 MB per 1080p video instead of ~350 MB with a byte per pixel.
 using ColorMap_t = std::vector< uint8_t >;
 
 static ColorMap_t ClassifyFrame( const cv::Mat &frame )

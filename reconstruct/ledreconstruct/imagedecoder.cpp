@@ -239,8 +239,11 @@ static bool FindSyncCycle( int *pnStart, int *pnEnd, const std::vector< int > &p
 }
 
 
-// Accumulates per-pixel transition bits over the color-slot centers of one cycle:
+// Accumulates per-pixel transition bits over the color slots of one cycle:
 // R->G->B->R is a 1, the reverse a 0, no change an erasure (clears *pKnown).
+// The LEDs change color at a phase that drifts against the camera's rolling shutter, so the frame at a slot center can
+// still show the previous color (or already the next) in some rows. Every slot changes color, so each pixel takes the
+// first of the frames before, at and after the center whose color differs from its previous slot's.
 static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstColor, const std::vector< ColorMap_t > &colorMaps, cv::Size frameSize, int nSyncStart, int nSyncEnd )
 {
 	double flSlotFrames = ( nSyncEnd - nSyncStart ) / ( double )k_nCycleSlots;
@@ -253,35 +256,46 @@ static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstCol
 	uint8_t *pKnowns = pKnown->ptr< uint8_t >();
 	uint8_t *pFirsts = pFirstColor->ptr< uint8_t >();
 	size_t nPixels = frameSize.area();
+	std::vector< uint8_t > prevColors( nPixels );
 
 	// Sync peak is the boundary between the two sync slots, so color slot k is centered k + 1.5 slots later.
-	const ColorMap_t *pPrevColors = nullptr;
 	for ( int k = 0; k < k_nColorSlots; k++ )
 	{
 		size_t nFrame = ( size_t )( nSyncStart + flSlotFrames * ( k + 1.5 ) + 0.5 );
-		if ( nFrame >= colorMaps.size() )
+		if ( nFrame + 1 >= colorMaps.size() )
 			return false;
 
-		const ColorMap_t &colors = colorMaps[nFrame];
-		if ( !pPrevColors )
+		const ColorMap_t &before = colorMaps[nFrame - 1];
+		const ColorMap_t &center = colorMaps[nFrame];
+		const ColorMap_t &after = colorMaps[nFrame + 1];
+		if ( k == 0 )
 		{
 			for ( size_t i = 0; i < nPixels; i++ )
 			{
-				pFirsts[i] = GetColor( colors, i );
+				pFirsts[i] = prevColors[i] = GetColor( center, i );
 			}
 
-			pPrevColors = &colors;
 			continue;
 		}
 
 		for ( size_t i = 0; i < nPixels; i++ )
 		{
-			int nStep = ( GetColor( colors, i ) - GetColor( *pPrevColors, i ) + 3 ) % 3;
+			uint8_t nPrev = prevColors[i];
+			uint8_t nColor = GetColor( before, i );
+			if ( nColor == nPrev )
+			{
+				nColor = GetColor( center, i );
+			}
+			if ( nColor == nPrev )
+			{
+				nColor = GetColor( after, i );
+			}
+
+			int nStep = ( nColor - nPrev + 3 ) % 3;
 			pKnowns[i] &= ( nStep != 0 );
 			pCodes[i] = ( pCodes[i] << 1 ) | ( nStep == 1 );
+			prevColors[i] = nColor;
 		}
-
-		pPrevColors = &colors;
 	}
 
 	return true;

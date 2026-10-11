@@ -99,10 +99,10 @@ static bool WriteObservationsJson( const fs::path &path, const std::vector< Poin
 }
 
 
-static bool LoadOrDecodeVideo( std::vector< PointObservation_t > *pObservations, const fs::path &videoPath, const std::string &dumpDir )
+static bool LoadOrDecodeVideo( std::vector< PointObservation_t > *pObservations, const fs::path &videoPath, const std::string &dumpDir, const std::string &imageDir )
 {
 	if ( dumpDir.empty() )
-		return DecodeVideo( pObservations, videoPath.string() );
+		return DecodeVideo( pObservations, videoPath.string(), imageDir );
 
 	fs::path jsonPath = fs::path( dumpDir ) / ( videoPath.filename().string() + ".json" );
 
@@ -114,7 +114,7 @@ static bool LoadOrDecodeVideo( std::vector< PointObservation_t > *pObservations,
 		return true;
 	}
 
-	if ( !DecodeVideo( pObservations, videoPath.string() ) )
+	if ( !DecodeVideo( pObservations, videoPath.string(), imageDir ) )
 		return false;
 
 	if ( !WriteObservationsJson( jsonPath, *pObservations ) )
@@ -126,7 +126,7 @@ static bool LoadOrDecodeVideo( std::vector< PointObservation_t > *pObservations,
 }
 
 
-bool ObservationSet::LoadFromVideos( const std::string &videoDir, const std::string &dumpDir )
+bool ObservationSet::LoadFromVideos( const std::string &videoDir, const std::string &dumpDir, const std::string &imageDir )
 {
 	std::vector< fs::path > paths = ListFiles( videoDir, { ".mov", ".mp4" } );
 	if ( paths.empty() )
@@ -140,6 +140,10 @@ bool ObservationSet::LoadFromVideos( const std::string &videoDir, const std::str
 	{
 		fs::create_directories( dumpDir, ec );
 	}
+	if ( !imageDir.empty() )
+	{
+		fs::create_directories( imageDir, ec );
+	}
 
 	int nVideos = ( int )paths.size();
 	std::vector< std::vector< PointObservation_t > > views( nVideos );
@@ -151,7 +155,7 @@ bool ObservationSet::LoadFromVideos( const std::string &videoDir, const std::str
 	{
 		for ( int i = nNext++; i < nVideos; i = nNext++ )
 		{
-			decoded[i] = LoadOrDecodeVideo( &views[i], paths[i], dumpDir );
+			decoded[i] = LoadOrDecodeVideo( &views[i], paths[i], dumpDir, imageDir );
 		}
 	};
 

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
 #include "imagedecoder.h"
@@ -47,6 +49,11 @@ enum LedColor_t
 	eGreen = 1,
 	eBlue = 2,
 };
+
+// Per-pixel labels: an LED index, or why the pixel didn't decode.
+static constexpr int k_nLabelErasure = -1;
+static constexpr int k_nLabelBadCodeword = -2;
+static constexpr int k_nLabelBadIndex = -3;
 
 
 static std::string FileName( const std::string &path )
@@ -112,7 +119,8 @@ static uint8_t GetColor( const ColorMap_t &colors, size_t i )
 
 
 // One pass over up to k_flMaxScanCycles cycles: mean intensity (for sync) and color classes of every frame.
-static bool ScanVideo( std::vector< double > *pIntensities, std::vector< ColorMap_t > *pColorMaps, cv::Size *pFrameSize, double *pflFps, const std::string &videoPath )
+// If pBrightest is set, also keeps the brightest frame (a sync frame: every LED lit white) in grayscale.
+static bool ScanVideo( std::vector< double > *pIntensities, std::vector< ColorMap_t > *pColorMaps, cv::Size *pFrameSize, double *pflFps, cv::Mat *pBrightest, const std::string &videoPath )
 {
 	cv::VideoCapture cap( videoPath );
 	if ( !cap.isOpened() )
@@ -130,10 +138,18 @@ static bool ScanVideo( std::vector< double > *pIntensities, std::vector< ColorMa
 
 	int nMaxFrames = ( int )ceil( k_flMaxScanCycles * ExpectedCycleFrames( flFps ) );
 	cv::Mat frame;
+	double flBrightest = -1.0;
 	while ( ( int )pIntensities->size() < nMaxFrames && cap.read( frame ) )
 	{
 		cv::Scalar mean = cv::mean( frame );
-		pIntensities->push_back( ( mean[0] + mean[1] + mean[2] ) / 3.0 );
+		double flIntensity = ( mean[0] + mean[1] + mean[2] ) / 3.0;
+		pIntensities->push_back( flIntensity );
+		if ( pBrightest && flIntensity > flBrightest )
+		{
+			flBrightest = flIntensity;
+			cv::cvtColor( frame, *pBrightest, cv::COLOR_BGR2GRAY );
+		}
+
 		pColorMaps->push_back( ClassifyFrame( frame ) );
 		*pFrameSize = frame.size();
 	}
@@ -284,7 +300,7 @@ static int DecodeNibble( uint8_t nCodeword )
 }
 
 
-// LED index, or -1. Only exact codewords are accepted: a speculative decode is worse than none.
+// LED index, or a negative k_nLabel*. Only exact codewords are accepted: a speculative decode is worse than none.
 static int DecodePixel( uint32_t nCode, uint8_t nFirstColor )
 {
 	int nLedIdx = 0;
@@ -292,17 +308,17 @@ static int DecodePixel( uint32_t nCode, uint8_t nFirstColor )
 	{
 		int nNibble = DecodeNibble( ( uint8_t )( nCode >> ( 24 - 8 * i ) ) );
 		if ( nNibble < 0 )
-			return -1;
+			return k_nLabelBadCodeword;
 
 		nLedIdx = ( nLedIdx << 4 ) | nNibble;
 	}
 
 	if ( nLedIdx >= k_nMaxLeds )
-		return -1;
+		return k_nLabelBadIndex;
 
 	// Each LED's color cycle starts at idx % 3.
 	if ( nLedIdx % 3 != nFirstColor )
-		return -1;
+		return k_nLabelBadIndex;
 
 	return nLedIdx;
 }
@@ -387,7 +403,68 @@ static void FindBlobs( std::vector< PointObservation_t > *pObservations, int *pn
 }
 
 
-bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::string &videoPath )
+// Brightest frame at half brightness, overlaid per pixel: decoded pixels in their LED's color (golden-ratio hues, so
+// neighboring indices contrast), bad codewords tinted red, valid codewords with a bad index or color phase tinted blue,
+// erasures left as background. Each observation gets a white circle (area = blob pixels) and its index; colored blobs
+// without one were too small or lost to a larger blob of the same index.
+static void RenderDecodeImage( const cv::Mat &labels, const cv::Mat &brightest, const std::vector< PointObservation_t > &observations, const std::string &path )
+{
+	cv::Mat ledColors( 1, k_nMaxLeds, CV_8UC3 );
+	for ( int i = 0; i < k_nMaxLeds; i++ )
+	{
+		double flHue = fmod( i * 0.6180339887, 1.0 );
+		ledColors.at< cv::Vec3b >( i ) = cv::Vec3b( ( uint8_t )( flHue * 180.0 ), 255, 255 );
+	}
+	cv::cvtColor( ledColors, ledColors, cv::COLOR_HSV2BGR );
+
+	cv::Mat image( labels.size(), CV_8UC3 );
+	for ( int y = 0; y < labels.rows; y++ )
+	{
+		const int *pLabelRow = labels.ptr< int >( y );
+		const uint8_t *pGrayRow = brightest.ptr< uint8_t >( y );
+		cv::Vec3b *pOutRow = image.ptr< cv::Vec3b >( y );
+
+		for ( int x = 0; x < labels.cols; x++ )
+		{
+			int nLabel = pLabelRow[x];
+			if ( nLabel >= 0 )
+			{
+				pOutRow[x] = ledColors.at< cv::Vec3b >( nLabel );
+				continue;
+			}
+
+			uint8_t nGray = pGrayRow[x] / 2;
+			pOutRow[x] = cv::Vec3b( nGray, nGray, nGray );
+			if ( nLabel == k_nLabelBadCodeword )
+			{
+				pOutRow[x][2] += 96;
+			}
+			else if ( nLabel == k_nLabelBadIndex )
+			{
+				pOutRow[x][0] += 96;
+			}
+		}
+	}
+
+	for ( const PointObservation_t &obs : observations )
+	{
+		int nRadius = std::max( 2, ( int )( sqrt( obs.nPixels / CV_PI ) + 0.5 ) );
+		cv::circle( image, obs.p, nRadius, cv::Scalar( 255, 255, 255 ), 1, cv::LINE_AA );
+
+		std::string text = std::to_string( obs.nLedIdx );
+		cv::Point textPos( ( int )obs.p.x + nRadius + 2, ( int )obs.p.y + 4 );
+		cv::putText( image, text, textPos, cv::FONT_HERSHEY_PLAIN, 0.8, cv::Scalar( 0, 0, 0 ), 3, cv::LINE_AA );
+		cv::putText( image, text, textPos, cv::FONT_HERSHEY_PLAIN, 0.8, cv::Scalar( 255, 255, 255 ), 1, cv::LINE_AA );
+	}
+
+	if ( !cv::imwrite( path, image ) )
+	{
+		printf( "Error: can't write %s\n", path.c_str() );
+	}
+}
+
+
+bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::string &videoPath, const std::string &imageDir )
 {
 	std::string videoName = FileName( videoPath );
 
@@ -396,7 +473,8 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 	std::vector< ColorMap_t > colorMaps;
 	cv::Size frameSize;
 	double flFps = 0.0;
-	if ( !ScanVideo( &intensities, &colorMaps, &frameSize, &flFps, videoPath ) )
+	cv::Mat brightest;
+	if ( !ScanVideo( &intensities, &colorMaps, &frameSize, &flFps, imageDir.empty() ? nullptr : &brightest, videoPath ) )
 	{
 		printf( "%s: can't open video\n", videoName.c_str() );
 		return false;
@@ -424,7 +502,7 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 
 	colorMaps.clear();
 
-	cv::Mat labels( code.size(), CV_32SC1, cv::Scalar( -1 ) );
+	cv::Mat labels( code.size(), CV_32SC1, cv::Scalar( k_nLabelErasure ) );
 	for ( int y = 0; y < code.rows; y++ )
 	{
 		const uint32_t *pCodeRow = code.ptr< uint32_t >( y );
@@ -441,11 +519,23 @@ bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::s
 		}
 	}
 
+	cv::Mat imageLabels;
+	if ( !imageDir.empty() )
+	{
+		imageLabels = labels.clone();
+	}
+
 	int nDuplicateIdxs = 0;
 	FindBlobs( pObservations, &nDuplicateIdxs, &labels );
 
 	printf( "%s: %d LEDs (sync frames %d-%d, %d indices with duplicate blobs; scan %d frames %.2f s, label %.2f s)\n",
 		videoName.c_str(), ( int )pObservations->size(), nSyncStart, nSyncEnd, nDuplicateIdxs, ( int )intensities.size(),
 		flScanSeconds, SecondsSince( labelStart ) );
+
+	if ( !imageDir.empty() )
+	{
+		RenderDecodeImage( imageLabels, brightest, *pObservations, ( std::filesystem::path( imageDir ) / ( videoName + ".decode.png" ) ).string() );
+	}
+
 	return true;
 }

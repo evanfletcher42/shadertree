@@ -22,8 +22,9 @@ class ObservationSet
 {
 public:
 	// Decode every video in a directory, one view per video. If dumpDir is set, write each view's observations
-	// there as <video>.json, and reuse that file instead of decoding when it is newer than the video.
-	bool LoadFromVideos( const std::string &videoDir, const std::string &dumpDir );
+	// there as <video>.json, and reuse that file instead of decoding when it is newer than the video. If imageDir is
+	// set, write a decode visualization per decoded (not cached) video there.
+	bool LoadFromVideos( const std::string &videoDir, const std::string &dumpDir, const std::string &imageDir );
 
 	// Load observation JSONs (one view per file), as written by LoadFromVideos.
 	bool LoadFromJson( const std::string &jsonDir );

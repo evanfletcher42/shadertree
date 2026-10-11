@@ -14,5 +14,5 @@ constexpr int k_nColorSlots = 33;
 constexpr int k_nCycleSlots = k_nSyncSlots + k_nColorSlots;
 
 // Decode one view's LED observations from a static video of ledcodes.glsl. Returns false (and prints why) if no
-// complete code cycle was found.
-bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::string &videoPath );
+// complete code cycle was found. If imageDir is set, also writes <imageDir>/<video>.decode.png (see RenderDecodeImage).
+bool DecodeVideo( std::vector< PointObservation_t > *pObservations, const std::string &videoPath, const std::string &imageDir );

@@ -20,6 +20,7 @@ int main(int argc, char** argv)
         ("videos", "Directory of videos to decode", cxxopts::value<std::string>())
         ("observations", "Directory of observation JSONs to solve from (instead of --videos)", cxxopts::value<std::string>())
         ("dump-observations", "Directory for per-video observation JSONs (written, and reused when newer than the video)", cxxopts::value<std::string>())
+        ("decode-images", "Directory for per-video decode visualizations (<video>.decode.png; slows decoding)", cxxopts::value<std::string>())
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
         ("s,solution", "Output unaligned solution JSON path (optional)", cxxopts::value<std::string>())
         ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>())
@@ -30,6 +31,7 @@ int main(int argc, char** argv)
     std::string videoDir;
     std::string observationsDir;
     std::string dumpDir;
+    std::string imageDir;
     std::string calPath;
     std::string outSolutionPath;
     std::string outJsonPath;
@@ -52,6 +54,9 @@ int main(int argc, char** argv)
 
         if (result.count("dump-observations"))
             dumpDir = result["dump-observations"].as<std::string>();
+
+        if (result.count("decode-images"))
+            imageDir = result["decode-images"].as<std::string>();
 
         if (result.count("solution"))
             outSolutionPath = result["solution"].as<std::string>();
@@ -81,7 +86,7 @@ int main(int argc, char** argv)
     // Process
     StageClock_t::time_point loadStart = StageClock_t::now();
     ObservationSet observationSet;
-    bool bLoaded = videoDir.empty() ? observationSet.LoadFromJson(observationsDir) : observationSet.LoadFromVideos(videoDir, dumpDir);
+    bool bLoaded = videoDir.empty() ? observationSet.LoadFromJson(observationsDir) : observationSet.LoadFromVideos(videoDir, dumpDir, imageDir);
     if (!bLoaded)
     {
         printf("Error: no observations loaded\n");

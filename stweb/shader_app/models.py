@@ -73,7 +73,6 @@ class ShaderPrefix(models.Model):
 
     @staticmethod
     def program_prefix():
-        """Prepended to every shader body, by both the runner and the editor preview."""
         pfx_obj = ShaderPrefix.objects.first()
         return (pfx_obj.content if pfx_obj else "") + "\n"
 
@@ -111,7 +110,6 @@ class LedCoordsCfg(models.Model):
     content = models.JSONField()
 
     def led_count(self):
-        """Mapped LEDs. Unmapped addresses all share one placeholder position ((0,0,0) from the solver, (0,-0.48,0) in the 2025 data)."""
         c = self.content
         counts = Counter(tuple(c[i:i + 3]) for i in range(0, len(c) - 2, 3))
         return sum(1 for n in counts.values() if n == 1)

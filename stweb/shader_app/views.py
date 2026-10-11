@@ -40,7 +40,6 @@ PREFIX_DOCS = {
 
 
 def prefix_doc(prefix):
-    """The prefix with a comment on each declaration found in PREFIX_DOCS."""
     lines = prefix.splitlines()
     width = max((len(line) for line in lines), default=0)
     out = []

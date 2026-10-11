@@ -6,11 +6,6 @@
 			"displayName": "Windows (vcpkg)",
 			"binaryDir": "${sourceDir}/build/windows",
 			"toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-			"cacheVariables": {
-				"VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
-				"VCPKG_TARGET_TRIPLET": "x64-windows-avx2",
-				"LEDRECONSTRUCT_AVX2": "ON"
-			},
 			"architecture": { "value": "x64", "strategy": "external" },
 			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
 		},

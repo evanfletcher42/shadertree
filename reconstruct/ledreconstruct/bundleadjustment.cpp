@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <fstream>
+#include <limits>
 
 #include <Eigen/Core>
 #include <ceres/rotation.h>
@@ -10,6 +11,12 @@
 #include <opencv2/imgproc.hpp>
 
 #include "bundleadjustment.h"
+
+static double Median(std::vector<double> values)
+{
+	std::nth_element(values.begin(), values.begin() + values.size() / 2, values.end());
+	return values[values.size() / 2];
+}
 
 BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pObservations, uint32_t nSeed)
 	: m_pObservations(pObservations)
@@ -193,6 +200,8 @@ bool BundleAdjuster::Reconstruct()
 		SetupBundleAdjustmentProblem(problem2, false, true, true);
 		SolveProblem(problem2);
 
+		CullReprojectionOutliers();
+
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
 
 		printf("Triangulating new points...\n");
@@ -217,6 +226,8 @@ bool BundleAdjuster::Reconstruct()
 		SetupBundleAdjustmentProblem(problem3, false, true, true);
 		SolveProblem(problem3);
 
+		CullReprojectionOutliers();
+
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
 	}
 
@@ -229,6 +240,8 @@ bool BundleAdjuster::Reconstruct()
 	ceres::Problem problem;
 	SetupBundleAdjustmentProblem(problem, true, true, true);
 	SolveProblem(problem);
+
+	CullReprojectionOutliers();
 
 	// With final BA, try one last round of triangulation.  
 	int nPointsAdded = TriangulateNewPoints();
@@ -512,6 +525,9 @@ int BundleAdjuster::InitializeNewCameras()
 		if (m_cameraFromWorldPoses.find(nFrameIdx) != m_cameraFromWorldPoses.end())
 			continue;
 
+		if (m_rejectedFrames.count(nFrameIdx))
+			continue;
+
 		bool bSuccess = InitCameraPosePnP(nFrameIdx);
 
 		if (bSuccess)
@@ -761,6 +777,80 @@ int BundleAdjuster::CullInvalidPoints()
 		}
 	}
 
+	return nLedsRemoved;
+}
+
+double BundleAdjuster::ComputeReprojectionError(const std::array<double, 6>& cameraFromWorld, const PointObservation_t& obs) const
+{
+	LedObservationResidual residual(obs.p.x, obs.p.y);
+	double flResidual[2];
+	if (!residual(cameraFromWorld.data(), m_intrinsics, m_ledPoints[obs.nLedIdx], flResidual))
+		return std::numeric_limits<double>::infinity();
+
+	return std::hypot(flResidual[0], flResidual[1]);
+}
+
+int BundleAdjuster::CullReprojectionOutliers()
+{
+	int nCamerasRemoved = 0;
+	for (auto it = m_cameraFromWorldPoses.begin(); it != m_cameraFromWorldPoses.end(); )
+	{
+		const int nFrameIdx = it->first;
+
+		std::vector<double> errors;
+		for (const PointObservation_t& obs : (*m_pObservations)[nFrameIdx])
+		{
+			if (m_pointsInitialized[obs.nLedIdx])
+				errors.push_back(ComputeReprojectionError(it->second, obs));
+		}
+
+		if (nFrameIdx == m_nOriginFrameId || errors.empty() || Median(errors) <= k_flMaxReprojectionErrorPx)
+		{
+			++it;
+			continue;
+		}
+
+		printf("CullReprojectionOutliers: Removing frame %d (median error %.1f px)\n", nFrameIdx, Median(errors));
+		m_rejectedFrames.insert(nFrameIdx);
+		it = m_cameraFromWorldPoses.erase(it);
+		nCamerasRemoved++;
+	}
+
+	int nObservationsRemoved = 0;
+	for (const auto& kv : m_cameraFromWorldPoses)
+	{
+		const std::array<double, 6>& cameraFromWorld = kv.second;
+		std::vector<PointObservation_t>& observations = (*m_pObservations)[kv.first];
+
+		size_t nBefore = observations.size();
+		observations.erase(std::remove_if(observations.begin(), observations.end(), [&](const PointObservation_t& obs)
+		{
+			return m_pointsInitialized[obs.nLedIdx] && ComputeReprojectionError(cameraFromWorld, obs) > k_flMaxReprojectionErrorPx;
+		}), observations.end());
+
+		nObservationsRemoved += (int)(nBefore - observations.size());
+	}
+
+	std::vector<int> observationCounts(k_nMaxLeds, 0);
+	for (const auto& kv : m_cameraFromWorldPoses)
+	{
+		for (const PointObservation_t& obs : (*m_pObservations)[kv.first])
+		{
+			observationCounts[obs.nLedIdx]++;
+		}
+	}
+
+	int nLedsRemoved = 0;
+	for (int i = 0; i < k_nMaxLeds; i++)
+	{
+		if (!m_pointsInitialized[i] || observationCounts[i] >= 2)
+			continue;
+
+		m_pointsInitialized[i] = false;
+		nLedsRemoved++;
+	}
+
+	printf("CullReprojectionOutliers: Removed %d cameras, %d observations, %d LEDs\n", nCamerasRemoved, nObservationsRemoved, nLedsRemoved);
 	return nLedsRemoved;
 }
 

@@ -2,6 +2,7 @@
 
 #include <ceres/ceres.h>
 #include <random>
+#include <unordered_set>
 #include <string>
 
 #include "ledobservationresidual.h"
@@ -62,6 +63,13 @@ public:
 	// Mark as unknown points that are in invalid locations (e.g. behind a camera).
 	int CullInvalidPoints();
 
+	// Reprojection error of one observation in pixels; infinite if the point is behind the camera.
+	double ComputeReprojectionError(const std::array<double, 6>& cameraFromWorld, const PointObservation_t& obs) const;
+
+	// Drop cameras whose median reprojection error exceeds k_flMaxReprojectionErrorPx (for good), then observations
+	// above it, then LEDs left with fewer than 2 observations.  Returns the number of LEDs culled.
+	int CullReprojectionOutliers();
+
 	// Set up a bundle adjustment problem over the entire map, as specified.
 	bool SetupBundleAdjustmentProblem( ceres::Problem &problem, bool bSolveIntrinsics, bool bSolvePoses, bool bSolvePoints );
 
@@ -80,10 +88,17 @@ public:
 	// Should be >= 4.  
 	static constexpr int k_nMinObservationsForPnPInit = 6;
 
+	// Reprojection error above which an observation (or a camera's median) is an outlier.
+	static constexpr double k_flMaxReprojectionErrorPx = 10.0;
+
 	// Attempt up to this many times to triangulate a point.
 	static constexpr int k_nMaxTriangulationRetries = 10;
 
-	const std::vector< std::vector< PointObservation_t > >* m_pObservations;
+	// Outlier observations are erased from these.
+	std::vector< std::vector< PointObservation_t > >* m_pObservations;
+
+	// Cameras culled for a bad pose; never re-added.
+	std::unordered_set< int > m_rejectedFrames;
 
 	// Map of camera poses, indexed by frame id.
 	// Each pose describes the change of basis from world coordinates to camera coodrinates.

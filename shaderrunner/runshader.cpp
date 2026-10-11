@@ -221,8 +221,6 @@ int main(int argc, char* argv[])
     semaReadyForLEDs = OGCreateSema();
     semaDoneLEDs = OGCreateSema();
 
-    std::thread thread(USBThread);
-
     // Read vertex shader code from stdin
     std::string vertexShaderCode;
     {
@@ -304,6 +302,9 @@ int main(int argc, char* argv[])
     }
 
     printf("Loaded LEDs: %d\n", numLEDs);
+
+    // started after all early exits; returning with a joinable thread aborts
+    std::thread thread(USBThread);
 
     // Create the index buffer
     GLuint* pIndices = new GLuint[numLEDs];

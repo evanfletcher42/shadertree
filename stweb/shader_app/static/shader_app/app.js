@@ -518,7 +518,7 @@ function saveShader() {
         shaderid: shaderIdent,
         title: shaderTitle,
         author: shaderAuthor,
-        playable: isPlayable,
+        playable: document.getElementById("is_playable").checked,
         shadertext: shaderText
     };
     const statusElement = document.getElementById('saveStatus');

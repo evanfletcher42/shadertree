@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse, Http404
 from django.template import loader
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.db import transaction
 from django.db.models import F
 from .utils import get_client_ip
@@ -19,6 +20,7 @@ def index(request):
     }
     return HttpResponse(template.render(context, request))
 
+@ensure_csrf_cookie
 def now_playing(request):
     template = loader.get_template("shader_app/now-playing.html")
     context = {}

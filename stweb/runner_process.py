@@ -1,6 +1,6 @@
 import os
 import django
-from django.db import transaction, IntegrityError, connection
+from django.db import transaction, IntegrityError, OperationalError, connection
 import sys
 import subprocess
 import random
@@ -157,7 +157,9 @@ def main():
             return nonce != last_seen_nonce
 
         result = runshader_interruptible(program_text, shadertime, should_interrupt, poll_seconds=0.1)
-        
+        if not result["interrupted"] and not result["timeout"]:
+            print(f"runshader exited early (rc={result['return_code']}): {shader}\n{result['stderr']}", flush=True)
+            time.sleep(1)
 
 
 if __name__ == "__main__":

@@ -92,6 +92,9 @@ public:
 	// Should be >= 4.  
 	static constexpr int k_nMinObservationsForPnPInit = 6;
 
+	// A new camera's PnP solve must have at least this fraction of inliers.
+	static constexpr double k_flMinPnPInlierFrac = 0.8;
+
 	// Reprojection error above which an observation (or a camera's median) is an outlier.
 	static constexpr double k_flMaxReprojectionErrorPx = 10.0;
 

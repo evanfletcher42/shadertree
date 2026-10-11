@@ -22,9 +22,8 @@ public:
 	// Load a camera calibration from a JSON file.
 	bool LoadCameraCalibrationFromJson(std::string& jsonPath);
 
-	// Initialize the bundle adjustment problem.
-	// This scans for a pair of frames where point motion cannot be explained by a homography,
-	// then initializes poses & map via TwoFramePlanarInit.
+	// Initialize the bundle adjustment problem from the pair of frames sharing the most LEDs whose motion
+	// can't be explained by a homography, via TwoFramePlanarInit.
 	bool InitializeBA();
 
 	// Attempt to reconstruct everything.  Runs the entire process.
@@ -86,6 +85,9 @@ public:
 
 	// Output a file containing LED locations, after alignment.
 	bool WriteAlignedReconstructionToJson(const std::string& outPath);
+
+	// The init pair must share at least this many LEDs.
+	static constexpr int k_nMinInitSharedLeds = 100;
 
 	// Minimum number of map point observations required to initialize the pose of a new camera.
 	// Should be >= 4.  

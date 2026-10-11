@@ -92,54 +92,49 @@ bool BundleAdjuster::LoadCameraCalibrationFromJson(std::string& jsonPath)
 
 bool BundleAdjuster::InitializeBA()
 {
-	// Find a pair of frames where the transformation cannot be explained by a homography.
-	// This enforces parallax between the two frames, making triangulation possible.
-
-	// Start by finding the frame with the most observations
-	int nFrame1 = 0;
-	int nMaxObs = 0;
-
-	for (int i = 0; i < m_pObservations->size(); i++)
-	{
-		int nLabeledLeds = (int)(*m_pObservations)[i].size();
-
-		if (nLabeledLeds > nMaxObs)
-		{
-			nMaxObs = nLabeledLeds;
-			nFrame1 = i;
-		}
-	}
-
-	printf("Init with frame %d (%d LEDs)\n", nFrame1, nMaxObs);
-
-	// Search the other frames in order, starting 5 after frame 1 and wrapping around.
-	printf("Looking for perspective differences...\n");
+	// Init from the pair of frames sharing the most LEDs whose motion a homography can't explain (parallax, so
+	// triangulation works).  Pairs are tried most-shared first; frame 1 (the origin) is the one with more LEDs.
 	int nFrames = (int)m_pObservations->size();
-	int nFrame2 = -1;
+	std::vector< std::array<int, 3> > pairs;  // shared LEDs, frame 1, frame 2
 	for (int i = 0; i < nFrames; i++)
 	{
-		int nCandidate = (nFrame1 + 5 + i) % nFrames;
-		if (nCandidate == nFrame1)
-			continue;
-
-		cv::Mat homography;
-		bool bHomographySuccess = TwoFrameHomography(nFrame1, nCandidate, homography);
-
-		printf("Frame %d -> %d: %d\n", nFrame1, nCandidate, bHomographySuccess);
-
-		if (!bHomographySuccess)
+		for (int j = i + 1; j < nFrames; j++)
 		{
-			nFrame2 = nCandidate;
-			break;
+			std::vector< const PointObservation_t* > obs1, obs2;
+			std::vector< cv::Point2f > points1, points2;
+			FindFrameCorrespondences(i, j, obs1, points1, obs2, points2);
+
+			if ((int)obs1.size() < k_nMinInitSharedLeds)
+				continue;
+
+			bool bFirstHasMore = (*m_pObservations)[i].size() >= (*m_pObservations)[j].size();
+			pairs.push_back({ (int)obs1.size(), bFirstHasMore ? i : j, bFirstHasMore ? j : i });
 		}
 	}
+	std::sort(pairs.begin(), pairs.end(), std::greater< std::array<int, 3> >());
 
-	if (nFrame2 < 0)
+	printf("Looking for perspective differences...\n");
+	int nFrame1 = -1;
+	int nFrame2 = -1;
+	for (const std::array<int, 3>& pair : pairs)
 	{
-		printf("InitializeBA: No frame has enough parallax with frame %d\n", nFrame1);
+		cv::Mat homography;
+		if (TwoFrameHomography(pair[1], pair[2], homography))
+			continue;
+
+		nFrame1 = pair[1];
+		nFrame2 = pair[2];
+		break;
+	}
+
+	if (nFrame1 < 0)
+	{
+		printf("InitializeBA: No pair of frames shares %d LEDs with enough parallax\n", k_nMinInitSharedLeds);
 		return false;
 	}
-	
+
+	printf("Init with frames %d and %d\n", nFrame1, nFrame2);
+
 	// Do a DSO-style two frame init (where frame 1 points are unprojected to Z=1)
 	if (!TwoFramePlanarInit(nFrame1, nFrame2))
 		return false;

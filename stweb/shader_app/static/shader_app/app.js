@@ -24,6 +24,7 @@ const prefixView = ace.edit("editorHeaderText", {
     theme: "ace/theme/chrome",
     readOnly: true,
     maxLines: Infinity,
+    wrap: true,
     showGutter: false,
     highlightActiveLine: false,
     showPrintMargin: false

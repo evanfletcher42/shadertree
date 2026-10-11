@@ -1037,6 +1037,15 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 	printf(summary.BriefReport().c_str());
 	printf("\n");
 
+	// Reprojection RMS without the robust loss, for comparing runs
+	ceres::Problem::EvaluateOptions evalOptions;
+	evalOptions.apply_loss_function = false;
+	double flCost = 0.0;
+	if (problem.Evaluate(evalOptions, &flCost, nullptr, nullptr, nullptr))
+	{
+		printf("Reprojection RMS: %f px over %d observations\n", std::sqrt(2.0 * flCost / problem.NumResidualBlocks()), problem.NumResidualBlocks());
+	}
+
 	// Update the OpenCV float copy of the camera intrinsics, in case this solve changed them.  
 	m_cameraMat.at<float>(0, 0) = (float)(m_intrinsics[LedObservationResidual::eFx]);
 	m_cameraMat.at<float>(1, 1) = (float)(m_intrinsics[LedObservationResidual::eFy]);

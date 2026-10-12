@@ -91,44 +91,21 @@
         </div>
     </div>
 
+<script src="{% static 'shader_app/playlist.js' %}"></script>
 <script>
-    function getCookie(name) {
-        // Standard Django CSRF cookie helper
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-
     const UP_NEXT_COUNT = 3;
 
-    async function updateNowPlaying() {
-        try {
-            const response = await fetch('/api/playlist');
-            if (!response.ok) throw new Error(`Response status: (${response.status})`);
-            const data = await response.json();
+    function showPlaylist(data) {
+        const playing = data.now_playing || {};
+        document.getElementById('title').textContent = playing.title || 'Title Unavailable';
+        document.getElementById('author').textContent = `By ${playing.author || 'Author Unavailable'}`;
 
-            const playing = data.now_playing || {};
-            document.getElementById('title').textContent = playing.title || 'Title Unavailable';
-            document.getElementById('author').textContent = `By ${playing.author || 'Author Unavailable'}`;
-
-            const upNext = document.getElementById('upNext');
-            upNext.replaceChildren();
-            for (const s of data.upcoming.slice(0, UP_NEXT_COUNT)) {
-                const line = document.createElement('div');
-                line.textContent = `${s.eta} ${s.title} by ${s.author}`.trim();
-                upNext.appendChild(line);
-            }
-        } catch (error) {
-            console.error('Failed to fetch now playing information:', error);
+        const upNext = document.getElementById('upNext');
+        upNext.replaceChildren();
+        for (const s of data.upcoming.slice(0, UP_NEXT_COUNT)) {
+            const line = document.createElement('div');
+            line.textContent = `${s.eta} ${s.title} by ${s.author}`.trim();
+            upNext.appendChild(line);
         }
     }
 
@@ -185,17 +162,15 @@
                 throw new Error(text);
             }
 
-            setTimeout(updateNowPlaying, 250);
         } catch (error) {
             console.error('Failed to play selected shader:', error);
         }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        updateNowPlaying();
+        pollPlaylist(showPlaylist);
         loadShaderDropdown();
 
-        setInterval(updateNowPlaying, 5000);
         setInterval(loadShaderDropdown, 5000);
 
         document.getElementById('playNowBtn').addEventListener('click', playSelectedShader);

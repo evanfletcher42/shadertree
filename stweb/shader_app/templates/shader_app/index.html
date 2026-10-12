@@ -46,11 +46,11 @@
                                     <td class="tableCell"></td>
                                 </tr>
                             {% for s in shaders %}
-                                <tr class="tableRow">
+                                <tr class="tableRow" data-ident="{{ s.ident }}">
                                     <td class="tableCell"> <a href="/edit/{{ s.ident }}/">{{ s.title }}</a> </td>
                                     <td class="tableCell"> {{ s.author }} </td>
                                     <td class="tableCell"> {% if s.is_playable %}✅{% else %}❌{% endif %} </td>
-                                    <td class="tableCell"> {{ s.next_play }} </td>
+                                    <td class="tableCell nextPlay"> {{ s.next_play }} </td>
                                 </tr>    
                             {% endfor %}
                     </table>
@@ -62,5 +62,20 @@
             </div>
         </div>
     </div>
+
+<script src="{% static 'shader_app/playlist.js' %}"></script>
+<script>
+    pollPlaylist(data => {
+        // first upcoming slot per shader, like the server-rendered column
+        const plays = {};
+        for (const s of data.upcoming)
+            plays[s.ident] ??= s.eta;
+        if (data.now_playing)
+            plays[data.now_playing.ident] = 'Now';
+
+        for (const row of document.querySelectorAll('tr[data-ident]'))
+            row.querySelector('.nextPlay').textContent = plays[row.dataset.ident] || '';
+    });
+</script>
 </body>
 </html>

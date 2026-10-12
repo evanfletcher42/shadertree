@@ -239,12 +239,12 @@ class PlaylistTests(TestCase):
                          {"ident": a.ident, "title": "A", "author": "a", "eta": "~12:01:30 PM"}]
         })
         resp = self.client.get("/")
-        self.assertContains(resp, "<td class=\"tableCell\"> Now </td>", html=True)
-        self.assertContains(resp, "<td class=\"tableCell\"> ~12:00:30 PM </td>", html=True)
+        self.assertContains(resp, "<td class=\"tableCell nextPlay\"> Now </td>", html=True)
+        self.assertContains(resp, "<td class=\"tableCell nextPlay\"> ~12:00:30 PM </td>", html=True)
 
         # after A's slot it still shows its next play, in the next cycle
         Shader.objects.filter(pk=a.pk).update(is_playing=False)
-        self.assertContains(self.client.get("/"), "<td class=\"tableCell\"> ~12:01:30 PM </td>", html=True)
+        self.assertContains(self.client.get("/"), "<td class=\"tableCell nextPlay\"> ~12:01:30 PM </td>", html=True)
 
 
 class RunnerTests(TestCase):

@@ -33,6 +33,9 @@ const char * serials[DEVICES] = { "f38dabcd5b6ebc14", "d3f9abcd3bdabc14" };
 volatile sig_atomic_t stop = 0;
 volatile sig_atomic_t stopLED = 0;
 
+// --no-usb: render as normal but don't touch USB
+bool g_bNoUsb = false;
+
 og_sema_t semaReadyForLEDs;
 og_sema_t semaDoneLEDs;
 
@@ -174,6 +177,13 @@ void USBThread()
 
 void WriteUsb(float *pfColors, int numLEDs)
 {
+    if ( g_bNoUsb )
+    {
+        // stand in for the WS2812 frame time: 30 us per LED, plus the reset gap
+        std::this_thread::sleep_for( std::chrono::microseconds( NR_LEDS_PER_STRAND * 30 + 300 ) );
+        return;
+    }
+
     // Wait for USB ready
     OGLockSema(semaReadyForLEDs);
 
@@ -217,6 +227,12 @@ int main(int argc, char* argv[])
     // Register signal handler
     signal(SIGTERM, handle_sigterm_sigint);
     signal(SIGINT, handle_sigterm_sigint);
+
+    for ( int i = 1; i < argc; i++ )
+    {
+        if ( strcmp( argv[i], "--no-usb" ) == 0 )
+            g_bNoUsb = true;
+    }
 
     semaReadyForLEDs = OGCreateSema();
     semaDoneLEDs = OGCreateSema();
@@ -290,7 +306,9 @@ int main(int argc, char* argv[])
         return 3;
     }
 
+    // runner_process.py waits for this line before marking the shader as playing
     printf("Shader compiled successfully\n");
+    fflush(stdout);
 
     // Get LED positions
     int numLEDs;
@@ -304,7 +322,9 @@ int main(int argc, char* argv[])
     printf("Loaded LEDs: %d\n", numLEDs);
 
     // started after all early exits; returning with a joinable thread aborts
-    std::thread thread(USBThread);
+    std::thread thread;
+    if ( !g_bNoUsb )
+        thread = std::thread(USBThread);
 
     // Create the index buffer
     GLuint* pIndices = new GLuint[numLEDs];
@@ -437,7 +457,8 @@ int main(int argc, char* argv[])
     OGUnlockSema(semaDoneLEDs);
 
 
-    thread.join();
+    if ( thread.joinable() )
+        thread.join();
     printf("Joined USB thread\n");
 
     delete[] pfColors;

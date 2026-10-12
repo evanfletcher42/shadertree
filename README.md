@@ -39,3 +39,13 @@ Open the repository root and install the recommended extensions (CMake Tools, C/
 ### Other platforms
 
 Use vcpkg for the dependencies: `cmake --preset linux -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake`.
+
+## Calibrating the camera
+
+The solver needs a calibration for the capture camera (`--calibration`). Make one with the dev tools in `reconstruct/tools` (from the `.venv`):
+
+1. `python reconstruct/tools/make_charuco_target.py charuco.png` and show it full screen on a monitor.
+2. Film it with the capture camera at the capture zoom and resolution, from many angles and distances, covering the frame corners.
+3. `python reconstruct/tools/calibrate_charuco_from_video.py <videos> --output calib.json`
+
+Keep `calib.json` with your captures, outside the repository.

@@ -7,6 +7,12 @@
 			"type": "promptString",
 			"description": "Observation JSON directory",
 			"default": "../recon-baseline/cpp-real-decode"
+		},
+		{
+			"id": "calibration",
+			"type": "promptString",
+			"description": "Camera calibration JSON (calibrate_charuco_from_video.py output)",
+			"default": "../calib.json"
 		}
 	],
 	"configurations": [
@@ -16,7 +22,7 @@
 			"request": "launch",
 			"program": "${command:cmake.launchTargetPath}",
 			"preLaunchTask": "Solver: build (selected CMake preset)",
-			"args": [ "--observations", "${input:observations}", "--calibration", "reconstruct/ledreconstruct/calib.json", "--output", "reconstruct/build/points.json" ],
+			"args": [ "--observations", "${input:observations}", "--calibration", "${input:calibration}", "--output", "reconstruct/build/points.json" ],
 			"cwd": "${workspaceFolder}",
 			"console": "integratedTerminal"
 		},
@@ -26,7 +32,7 @@
 			"request": "launch",
 			"program": "${command:cmake.launchTargetPath}",
 			"preLaunchTask": "Solver: build (selected CMake preset)",
-			"args": [ "--observations", "${input:observations}", "--calibration", "reconstruct/ledreconstruct/calib.json", "--output", "reconstruct/build/points.json" ],
+			"args": [ "--observations", "${input:observations}", "--calibration", "${input:calibration}", "--output", "reconstruct/build/points.json" ],
 			"cwd": "${workspaceFolder}",
 			"MIMode": "gdb"
 		}

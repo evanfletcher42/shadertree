@@ -175,6 +175,11 @@ class DocsFromDataTests(TestCase):
         self.assertEqual(LedCoordsCfg.objects.get().led_count(), 2)
         self.assertContains(self.client.get("/about"), "made out of 2 addressable LEDs")
 
+    def test_index_newest_first(self):
+        old, new = make_shader(title="Old shader"), make_shader(title="New shader")
+        content = self.client.get("/").content.decode()
+        self.assertLess(content.index("New shader"), content.index("Old shader"))
+
     def test_index_period(self):
         self.assertContains(self.client.get("/"), "30 seconds each")
 

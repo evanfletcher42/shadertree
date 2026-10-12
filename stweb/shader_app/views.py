@@ -29,7 +29,7 @@ def shader_info(shader):
 def index(request):
     template = loader.get_template("shader_app/index.html")
 
-    shaders = Shader.objects.filter(is_deleted=False).order_by('created_at').values('id', 'title', 'author', 'created_at', 'ident', 'is_playable')
+    shaders = Shader.objects.filter(is_deleted=False).order_by('-created_at').values('id', 'title', 'author', 'created_at', 'ident', 'is_playable')
     shader_list = list(shaders)  # QuerySet->List
     plays = next_plays()
     for s in shader_list:

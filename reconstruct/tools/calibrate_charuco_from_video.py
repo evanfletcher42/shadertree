@@ -2,9 +2,9 @@
 
   calibrate_charuco_from_video.py <video> [<video> ...] [--output calib.json] [--every N]
 
-Film make_charuco_target.py's board from many angles and distances, filling the frame corners too,
-with the same camera, zoom and resolution as the tree capture.
-Writes the solver's --calibration JSON: image size, pinhole intrinsics, OpenCV 5-coef distortion.
+Film make_charuco_target.py's board from many angles and distances, filling the entire image.
+Use the same camera, zoom, and resolution as will be used for the tree capture.
+Writes the json to use with the solver (--calibration calib.json).
 """
 import argparse
 import json

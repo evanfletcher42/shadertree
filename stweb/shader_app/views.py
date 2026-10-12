@@ -15,7 +15,9 @@ def eta_text(eta):
 
 def next_plays():
     """Shader id -> when it next plays on the tree, as display text."""
-    texts = {s.id: eta_text(eta) for s, eta in PlaybackControl.get().upcoming()}
+    texts = {}
+    for shader, eta in PlaybackControl.get().upcoming():
+        texts.setdefault(shader.id, eta_text(eta))
     for shader_id in Shader.objects.filter(is_playing=True).values_list("id", flat=True):
         texts[shader_id] = "Now"
     return texts

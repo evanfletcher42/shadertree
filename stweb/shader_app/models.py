@@ -142,9 +142,11 @@ class PlaybackControl(models.Model):
     )
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Shuffled cycle. Only the runner writes these.
-    queue = models.JSONField(default=list)  # shader ids still to play, in order
-    played = models.JSONField(default=list)  # shader ids played this cycle, current last
+    # The rest of this cycle, then the whole next cycle, so every playable shader has a next play time.
+    # Only the runner writes these.
+    queue = models.JSONField(default=list)  # shader ids still to play this cycle, in order
+    next_cycle = models.JSONField(default=list)  # every playable shader id, in next cycle's order
+    current = models.BigIntegerField(null=True, blank=True)  # shader id the runner is on
     started_at = models.DateTimeField(null=True, blank=True)  # start of the current shader; null when the runner is stopped
 
     @staticmethod
@@ -152,35 +154,42 @@ class PlaybackControl(models.Model):
         return PlaybackControl.objects.get_or_create(pk=1)[0]
 
     def sync(self, playable_ids):
-        """Drop shaders that stopped being playable and slot new ones in later this cycle."""
+        """Drop shaders that stopped being playable. Slot new ones in later this cycle and into the next."""
         playable = set(playable_ids)
         self.queue = [i for i in self.queue if i in playable]
-        self.played = [i for i in self.played if i in playable]
-        for i in playable - set(self.queue) - set(self.played):
-            self.queue.insert(random.randint(0, len(self.queue)), i)
+        self.next_cycle = [i for i in self.next_cycle if i in playable]
+        for i in playable - set(self.next_cycle):
+            if i not in self.queue:
+                self.queue.insert(random.randint(0, len(self.queue)), i)
+            self.next_cycle.insert(random.randint(0, len(self.next_cycle)), i)
+        self.avoid_repeat()
 
-    def take_next(self, playable_ids):
-        """Pop the next shader id, reshuffling when the cycle is done. None if nothing is playable."""
+    def take_next(self):
+        """Advance to the next shader id, starting the next cycle when this one is done. None if nothing is playable."""
         if not self.queue:
-            last = self.played[-1] if self.played else None
-            self.queue = random.sample(list(playable_ids), len(playable_ids))
-            if len(self.queue) > 1 and self.queue[0] == last:
-                self.queue.append(self.queue.pop(0))
-            self.played = []
-        if not self.queue:
-            return None
-        shader_id = self.queue.pop(0)
-        self.played.append(shader_id)
-        return shader_id
+            self.queue = self.next_cycle
+            self.next_cycle = random.sample(self.queue, len(self.queue))
+        self.current = self.queue.pop(0) if self.queue else None
+        self.avoid_repeat()
+        return self.current
 
     def play_next(self, shader_id):
         if shader_id in self.queue:
             self.queue.remove(shader_id)
         self.queue.insert(0, shader_id)
+        self.avoid_repeat()
+
+    def avoid_repeat(self):
+        # the next cycle shouldn't start with the shader that ends this one
+        last = self.queue[-1] if self.queue else self.current
+        if len(self.next_cycle) > 1 and self.next_cycle[0] == last:
+            self.next_cycle[0], self.next_cycle[1] = self.next_cycle[1], self.next_cycle[0]
 
     def upcoming(self):
-        """(shader, estimated start) pairs, soonest first. The estimate is None while the runner is stopped."""
-        shaders = Shader.objects.in_bulk(self.queue)
+        """(shader, estimated start) pairs through the end of the next cycle, soonest first.
+        Most shaders appear twice. The estimate is None while the runner is stopped."""
+        ids = self.queue + self.next_cycle
+        shaders = Shader.objects.in_bulk(ids)
         duration = timedelta(seconds=settings.SHADER_PLAY_SECONDS)
         return [(shaders[i], self.started_at + duration * (n + 1) if self.started_at else None)
-                for n, i in enumerate(self.queue) if i in shaders]
+                for n, i in enumerate(ids) if i in shaders]

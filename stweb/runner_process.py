@@ -68,14 +68,14 @@ def refresh(ctrl):
     """Sync the playlist with the playable shaders and apply any play-now. True if a play-now was applied."""
     close_old_connections()
     playable = playable_ids()
-    before = (list(ctrl.queue), list(ctrl.played))
+    before = (list(ctrl.queue), list(ctrl.next_cycle))
     ctrl.sync(playable)
     forced = take_play_now()
     applied = forced in playable
     if applied:
         ctrl.play_next(forced)
-    if (ctrl.queue, ctrl.played) != before:
-        ctrl.save(update_fields=["queue", "played"])
+    if (ctrl.queue, ctrl.next_cycle) != before:
+        ctrl.save(update_fields=["queue", "next_cycle"])
     return applied
 
 
@@ -157,13 +157,13 @@ def run_shader(program_text, on_compiled, should_stop):
 def play_one(ctrl):
 
     refresh(ctrl)
-    shader_id = ctrl.take_next(playable_ids())
+    shader_id = ctrl.take_next()
     if shader_id is None:
         print("No shaders available")
         time.sleep(1)
         return
     ctrl.started_at = timezone.now()
-    ctrl.save(update_fields=["queue", "played", "started_at"])
+    ctrl.save(update_fields=["queue", "next_cycle", "current", "started_at"])
 
     shader = Shader.objects.filter(pk=shader_id).first()
     version = shader.versions.order_by('-created_at').first() if shader else None
@@ -185,7 +185,8 @@ def play_one(ctrl):
         set_now_playing(shader.id)
 
     def should_stop():
-        return refresh(ctrl) or shader.id not in ctrl.played
+        # next_cycle holds every playable shader
+        return refresh(ctrl) or shader.id not in ctrl.next_cycle
 
     program_text = ShaderPrefix.program_prefix() + version.content
     compiled, stopped, return_code, stderr = run_shader(program_text, on_compiled, should_stop)

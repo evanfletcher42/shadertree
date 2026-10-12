@@ -175,53 +175,76 @@ class PlaylistTests(TestCase):
     def test_cycle(self):
         ctrl = PlaybackControl.get()
         ids = [1, 2, 3, 4]
+        ctrl.sync(ids)
         for cycle in range(20):
-            order = [ctrl.take_next(ids) for _ in ids]
+            self.assertEqual(sorted(ctrl.next_cycle), ids)
+            planned = ctrl.queue + ctrl.next_cycle if cycle else None
+            order = [ctrl.take_next() for _ in ids]
             self.assertEqual(sorted(order), ids)
             if cycle:
+                self.assertEqual(order, planned[:4])
                 self.assertNotEqual(order[0], last)
             last = order[-1]
 
     def test_nothing_playable(self):
-        self.assertIsNone(PlaybackControl.get().take_next([]))
+        ctrl = PlaybackControl.get()
+        ctrl.sync([])
+        self.assertIsNone(ctrl.take_next())
 
     def test_sync(self):
-        ctrl = PlaybackControl(queue=[3, 4], played=[1, 2])
+        ctrl = PlaybackControl(queue=[3, 4], next_cycle=[2, 4, 1, 3], current=2)
         for _ in range(20):
             ctrl.sync([1, 2, 3, 4, 5])
-            self.assertEqual(ctrl.played, [1, 2])
             self.assertEqual(sorted(ctrl.queue), [3, 4, 5])
             self.assertEqual([i for i in ctrl.queue if i != 5], [3, 4])
+            self.assertEqual([i for i in ctrl.next_cycle if i != 5], [2, 4, 1, 3])
             ctrl.queue.remove(5)
+            ctrl.next_cycle.remove(5)
         ctrl.sync([1, 3])
-        self.assertEqual((ctrl.played, ctrl.queue), ([1], [3]))
+        self.assertEqual((ctrl.queue, ctrl.next_cycle), ([3], [1, 3]))
+
+    def test_avoid_repeat(self):
+        ctrl = PlaybackControl(queue=[3, 4], next_cycle=[1, 4, 2, 3])
+        ctrl.sync([2, 3, 4])
+        self.assertEqual(ctrl.next_cycle, [2, 4, 3])
+        ctrl.queue = []
+        ctrl.current = 2
+        ctrl.sync([2, 3, 4])
+        self.assertEqual(ctrl.next_cycle, [4, 2, 3])
 
     def test_play_next(self):
-        ctrl = PlaybackControl(queue=[3, 4, 5], played=[1, 2])
+        ctrl = PlaybackControl(queue=[3, 4, 5], next_cycle=[1, 2, 3, 4, 5], current=2)
         ctrl.play_next(5)
         self.assertEqual(ctrl.queue, [5, 3, 4])
         ctrl.play_next(1)
         self.assertEqual(ctrl.queue, [1, 5, 3, 4])
-        self.assertEqual(ctrl.take_next([1, 2, 3, 4, 5]), 1)
+        self.assertEqual(ctrl.take_next(), 1)
 
     def test_upcoming(self):
         a, b = make_shader(), make_shader()
         start = datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc)
-        ctrl = PlaybackControl(queue=[b.id, 999, a.id], started_at=start)
-        self.assertEqual([(s, eta.minute, eta.second) for s, eta in ctrl.upcoming()], [(b, 0, 30), (a, 1, 30)])
+        ctrl = PlaybackControl(queue=[b.id], next_cycle=[a.id, 999, b.id], started_at=start)
+        self.assertEqual([(s, eta.minute, eta.second) for s, eta in ctrl.upcoming()], [(b, 0, 30), (a, 1, 0), (b, 2, 0)])
         ctrl.started_at = None
-        self.assertEqual(ctrl.upcoming(), [(b, None), (a, None)])
+        self.assertEqual(ctrl.upcoming(), [(b, None), (a, None), (b, None)])
 
     def test_api(self):
         a, b = make_shader(title="A", is_playing=True), make_shader(title="B")
-        PlaybackControl.objects.create(pk=1, queue=[b.id], started_at=datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc))
+        PlaybackControl.objects.create(pk=1, queue=[b.id], next_cycle=[b.id, a.id], current=a.id,
+                                       started_at=datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc))
         self.assertEqual(self.client.get("/api/playlist").json(), {
             "now_playing": {"ident": a.ident, "title": "A", "author": "a"},
-            "upcoming": [{"ident": b.ident, "title": "B", "author": "a", "eta": "~12:00 PM"}]
+            "upcoming": [{"ident": b.ident, "title": "B", "author": "a", "eta": "~12:00 PM"},
+                         {"ident": b.ident, "title": "B", "author": "a", "eta": "~12:01 PM"},
+                         {"ident": a.ident, "title": "A", "author": "a", "eta": "~12:01 PM"}]
         })
         resp = self.client.get("/")
         self.assertContains(resp, "<td class=\"tableCell\"> Now </td>", html=True)
         self.assertContains(resp, "<td class=\"tableCell\"> ~12:00 PM </td>", html=True)
+
+        # after A's slot it still shows its next play, in the next cycle
+        Shader.objects.filter(pk=a.pk).update(is_playing=False)
+        self.assertContains(self.client.get("/"), "<td class=\"tableCell\"> ~12:01 PM </td>", html=True)
 
 
 class RunnerTests(TestCase):
@@ -242,7 +265,7 @@ class RunnerTests(TestCase):
 
     def test_refresh_play_now(self):
         a, b, off = make_shader(), make_shader(), make_shader(is_playable=False)
-        ctrl = PlaybackControl.objects.create(pk=1, queue=[a.id, b.id])
+        ctrl = PlaybackControl.objects.create(pk=1, queue=[a.id, b.id], next_cycle=[a.id, b.id])
         self.assertFalse(self.runner.refresh(ctrl))
         PlaybackControl.objects.filter(pk=1).update(force_shader=b)
         self.assertTrue(self.runner.refresh(ctrl))

@@ -1856,6 +1856,16 @@ ul.tab li a:hover, a:focus, .active
     padding-bottom: 48px;
   }
 
+.playlistNote {
+    font-size: 1.25em;
+    color: #404040;
+    margin: 4px 0 12px 0;
+}
+
+.playlistNote p {
+    margin: 2px 0;
+}
+
 a.newButton {
     display: inline-block;
     background-color: #28a745;

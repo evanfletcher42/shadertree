@@ -28,6 +28,10 @@
             <div class="bigText">Write Shaders for a Physical LED Tree</div>
             <div class="block0">
                 <div style="font-size: 2.0em">All Shaders</div>
+                <div class="playlistNote">
+                    <p>The tree plays every shader in a shuffled order, {{ playseconds }} seconds each, then reshuffles.</p>
+                    <p>To add your shader to the playlist, check "Run this shader on the physical tree" in the editor.</p>
+                </div>
                 <div class="divShadersTable">
                     <table cellspacing="0" cellpadding="0" style="background-color: rgb(0, 0, 0); visibility: visible; width: 100%" id="shadersTable">
                         <thead>
@@ -57,8 +61,6 @@
                                 </tr>    
                             {% endfor %}
                     </table>
-                    <p>The tree plays every shader in a shuffled order, {{ playseconds }} seconds each, then reshuffles.</p>
-                    <p>To add your shader to the playlist, check "Run this shader on the physical tree" in the editor.</p>
                 </div>
             </div>
             <div class="block1">

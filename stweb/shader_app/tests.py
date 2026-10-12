@@ -127,7 +127,7 @@ class EditorPageTests(TestCase):
         shader = make_shader()
         self.assertNotContains(self.client.get(f"/edit/{shader.ident}/"), "Plays next")
         PlaybackControl.objects.filter(pk=1).update(queue=[shader.id], started_at=datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc))
-        self.assertContains(self.client.get(f"/edit/{shader.ident}/"), "Plays next on the tree at ~12:00 PM.")
+        self.assertContains(self.client.get(f"/edit/{shader.ident}/"), "Plays next on the tree at ~12:00:30 PM.")
         Shader.objects.filter(pk=shader.pk).update(is_playing=True)
         self.assertContains(self.client.get(f"/edit/{shader.ident}/"), "Playing on the tree now.")
 
@@ -234,17 +234,17 @@ class PlaylistTests(TestCase):
                                        started_at=datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc))
         self.assertEqual(self.client.get("/api/playlist").json(), {
             "now_playing": {"ident": a.ident, "title": "A", "author": "a"},
-            "upcoming": [{"ident": b.ident, "title": "B", "author": "a", "eta": "~12:00 PM"},
-                         {"ident": b.ident, "title": "B", "author": "a", "eta": "~12:01 PM"},
-                         {"ident": a.ident, "title": "A", "author": "a", "eta": "~12:01 PM"}]
+            "upcoming": [{"ident": b.ident, "title": "B", "author": "a", "eta": "~12:00:30 PM"},
+                         {"ident": b.ident, "title": "B", "author": "a", "eta": "~12:01:00 PM"},
+                         {"ident": a.ident, "title": "A", "author": "a", "eta": "~12:01:30 PM"}]
         })
         resp = self.client.get("/")
         self.assertContains(resp, "<td class=\"tableCell\"> Now </td>", html=True)
-        self.assertContains(resp, "<td class=\"tableCell\"> ~12:00 PM </td>", html=True)
+        self.assertContains(resp, "<td class=\"tableCell\"> ~12:00:30 PM </td>", html=True)
 
         # after A's slot it still shows its next play, in the next cycle
         Shader.objects.filter(pk=a.pk).update(is_playing=False)
-        self.assertContains(self.client.get("/"), "<td class=\"tableCell\"> ~12:01 PM </td>", html=True)
+        self.assertContains(self.client.get("/"), "<td class=\"tableCell\"> ~12:01:30 PM </td>", html=True)
 
 
 class RunnerTests(TestCase):

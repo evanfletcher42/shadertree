@@ -11,7 +11,7 @@ from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText
 import json
 
 def eta_text(eta):
-    return "~" + time_format(timezone.localtime(eta), "g:i A") if eta else ""
+    return "~" + time_format(timezone.localtime(eta), "g:i:s A") if eta else ""
 
 def next_plays():
     """Shader id -> when it next plays on the tree, as display text."""

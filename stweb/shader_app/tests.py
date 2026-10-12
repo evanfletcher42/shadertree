@@ -101,6 +101,14 @@ class PlayNowApiTests(TestCase):
         shader = make_shader()
         self.assertEqual(self.client.get(f"/api/play_now/{shader.ident}/").status_code, 405)
 
+    def test_index_buttons(self):
+        on, off = make_shader(), make_shader(is_playable=False)
+        resp = self.client.get("/")
+        self.assertIn("csrftoken", resp.cookies)
+        self.assertContains(resp, f'<tr class="tableRow" data-ident="{on.ident}">')
+        self.assertContains(resp, '<td class="tableCell playNow" data-playable="1"></td>', count=1, html=True)
+        self.assertContains(resp, '<td class="tableCell playNow" data-playable=""></td>', count=1, html=True)
+
 
 class EditorPageTests(TestCase):
     def setUp(self):

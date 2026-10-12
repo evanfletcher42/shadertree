@@ -1867,3 +1867,13 @@ a.newButton {
     text-align: center;
     transition: background-color 0.3s, transform 0.2s;
   }
+
+button.playNowButton {
+    background-color: #28a745;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 3px 12px;
+    font-size: 1em;
+    cursor: pointer;
+}

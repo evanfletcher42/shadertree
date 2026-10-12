@@ -46,6 +46,11 @@
             color: #A0A0A0;
         }
 
+        .upnext-section button.playNowButton {
+            font-size: 0.6em;
+            vertical-align: middle;
+        }
+
         .bottom-section p {
             font-size: 4em;
         }
@@ -104,7 +109,8 @@
         upNext.replaceChildren();
         for (const s of data.upcoming.slice(0, UP_NEXT_COUNT)) {
             const line = document.createElement('div');
-            line.textContent = `${s.eta} ${s.title} by ${s.author}`.trim();
+            line.textContent = `${s.eta} ${s.title} by ${s.author} `.trimStart();
+            line.appendChild(makePlayNowButton(s.ident));
             upNext.appendChild(line);
         }
     }
@@ -141,30 +147,10 @@
         }
     }
 
-    async function playSelectedShader() {
+    function playSelectedShader() {
         const ident = document.getElementById('shaderSelect').value;
-        if (!ident) return;
-
-        try {
-            const csrftoken = getCookie('csrftoken');
-
-            const response = await fetch(`/api/play_now/${encodeURIComponent(ident)}/`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'X-CSRFToken': csrftoken,
-                },
-            });
-
-            if (!response.ok) {
-                const text = await response.text();
-                console.error("Play-now failed:", response.status, text);
-                throw new Error(text);
-            }
-
-        } catch (error) {
-            console.error('Failed to play selected shader:', error);
-        }
+        if (ident)
+            playNow(ident);
     }
 
     document.addEventListener('DOMContentLoaded', () => {

@@ -32,3 +32,25 @@ function pollPlaylist(onUpdate) {
     tick();
     setInterval(tick, PLAYLIST_POLL_MS);
 }
+
+// Ask the tree to play this shader next
+async function playNow(ident) {
+    try {
+        const response = await fetch(`/api/play_now/${encodeURIComponent(ident)}/`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        });
+        if (!response.ok) throw new Error(`Response status: (${response.status}) ${await response.text()}`);
+    } catch (error) {
+        console.error('Play-now failed:', error);
+    }
+}
+
+function makePlayNowButton(ident) {
+    const button = document.createElement('button');
+    button.className = 'playNowButton';
+    button.textContent = 'Play Now';
+    button.addEventListener('click', () => playNow(ident));
+    return button;
+}

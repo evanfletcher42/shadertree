@@ -25,6 +25,7 @@ def next_plays():
 def shader_info(shader):
     return {"ident": shader.ident, "title": shader.title, "author": shader.author}
 
+@ensure_csrf_cookie
 def index(request):
     template = loader.get_template("shader_app/index.html")
 

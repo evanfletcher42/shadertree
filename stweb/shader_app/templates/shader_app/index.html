@@ -36,11 +36,13 @@
                                 <td class="tableHeadCell">By</td>
                                 <td class="tableHeadCell">Run on Tree</td>
                                 <td class="tableHeadCell">Next Play</td>
+                                <td class="tableHeadCell"></td>
                             </tr>
                         </thead>
                         <tbody>
                                 <tr class="tableRow">
                                     <td class="tableCell"><a class="newButton" href="/edit/new">+ New Shader</a></td>
+                                    <td class="tableCell"></td>
                                     <td class="tableCell"></td>
                                     <td class="tableCell"></td>
                                     <td class="tableCell"></td>
@@ -51,6 +53,7 @@
                                     <td class="tableCell"> {{ s.author }} </td>
                                     <td class="tableCell"> {% if s.is_playable %}✅{% else %}❌{% endif %} </td>
                                     <td class="tableCell nextPlay"> {{ s.next_play }} </td>
+                                    <td class="tableCell playNow" data-playable="{{ s.is_playable|yesno:'1,' }}"></td>
                                 </tr>    
                             {% endfor %}
                     </table>
@@ -65,6 +68,9 @@
 
 <script src="{% static 'shader_app/playlist.js' %}"></script>
 <script>
+    for (const cell of document.querySelectorAll('td.playNow[data-playable="1"]'))
+        cell.appendChild(makePlayNowButton(cell.parentElement.dataset.ident));
+
     pollPlaylist(data => {
         // first upcoming slot per shader, like the server-rendered column
         const plays = {};

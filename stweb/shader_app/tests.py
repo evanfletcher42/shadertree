@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from django.contrib.auth.models import User
 from django.test import TestCase
 from .models import Shader, ShaderVersion, ShaderPrefix, LedCoordsCfg, PlaybackControl, BannedIP
@@ -49,6 +50,13 @@ class SaveApiTests(TestCase):
     def test_get_rejected(self):
         self.assertEqual(self.client.get("/api/save").status_code, 405)
 
+    def test_keeps_runner_fields(self):
+        shader = make_shader(is_playing=True, compile_failures=2, compile_error="bad")
+        self.assertEqual(self.save(shaderid=shader.ident).status_code, 200)
+        shader.refresh_from_db()
+        self.assertTrue(shader.is_playing)
+        self.assertEqual((shader.compile_failures, shader.compile_error), (0, ""))
+
     def test_banned(self):
         BannedIP.objects.create(ip_address="10.0.0.1")
         self.assertEqual(self.save().status_code, 403)
@@ -76,12 +84,12 @@ class DeleteApiTests(TestCase):
 class PlayNowApiTests(TestCase):
     def test_play_now(self):
         shader = make_shader()
-        for nonce in (1, 2):
-            resp = self.client.post(f"/api/play_now/{shader.ident}/")
-            self.assertEqual(resp.status_code, 200)
-            ctrl = PlaybackControl.objects.get(pk=1)
-            self.assertEqual(ctrl.force_shader_id, shader.id)
-            self.assertEqual(ctrl.force_nonce, nonce)
+        PlaybackControl.objects.create(pk=1, queue=[shader.id])
+        resp = self.client.post(f"/api/play_now/{shader.ident}/")
+        self.assertEqual(resp.status_code, 200)
+        ctrl = PlaybackControl.objects.get(pk=1)
+        self.assertEqual(ctrl.force_shader_id, shader.id)
+        self.assertEqual(ctrl.queue, [shader.id])
 
     def test_not_playable(self):
         for shader in (make_shader(is_playable=False), make_shader(is_deleted=True)):
@@ -115,6 +123,22 @@ class EditorPageTests(TestCase):
         self.assertContains(resp, "My shader")
         self.assertContains(resp, "void main() {}")
 
+    def test_next_play(self):
+        shader = make_shader()
+        self.assertNotContains(self.client.get(f"/edit/{shader.ident}/"), "Plays next")
+        PlaybackControl.objects.filter(pk=1).update(queue=[shader.id], started_at=datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc))
+        self.assertContains(self.client.get(f"/edit/{shader.ident}/"), "Plays next on the tree at ~12:00 PM.")
+        Shader.objects.filter(pk=shader.pk).update(is_playing=True)
+        self.assertContains(self.client.get(f"/edit/{shader.ident}/"), "Playing on the tree now.")
+
+    def test_compile_error(self):
+        shader = make_shader(compile_failures=1, compile_error="ERROR: 0:3: oops")
+        resp = self.client.get(f"/edit/{shader.ident}/")
+        self.assertContains(resp, "ERROR: 0:3: oops")
+        self.assertNotContains(resp, "taken off the tree")
+        Shader.objects.filter(pk=shader.pk).update(compile_failures=3, is_playable=False)
+        self.assertContains(self.client.get(f"/edit/{shader.ident}/"), "taken off the tree")
+
     def test_deleted(self):
         shader = make_shader(is_deleted=True)
         self.assertEqual(self.client.get(f"/edit/{shader.ident}/").status_code, 404)
@@ -144,4 +168,86 @@ class DocsFromDataTests(TestCase):
         self.assertContains(self.client.get("/about"), "made out of 2 addressable LEDs")
 
     def test_index_period(self):
-        self.assertContains(self.client.get("/"), "every 30 seconds")
+        self.assertContains(self.client.get("/"), "30 seconds each")
+
+
+class PlaylistTests(TestCase):
+    def test_cycle(self):
+        ctrl = PlaybackControl.get()
+        ids = [1, 2, 3, 4]
+        for cycle in range(20):
+            order = [ctrl.take_next(ids) for _ in ids]
+            self.assertEqual(sorted(order), ids)
+            if cycle:
+                self.assertNotEqual(order[0], last)
+            last = order[-1]
+
+    def test_nothing_playable(self):
+        self.assertIsNone(PlaybackControl.get().take_next([]))
+
+    def test_sync(self):
+        ctrl = PlaybackControl(queue=[3, 4], played=[1, 2])
+        for _ in range(20):
+            ctrl.sync([1, 2, 3, 4, 5])
+            self.assertEqual(ctrl.played, [1, 2])
+            self.assertEqual(sorted(ctrl.queue), [3, 4, 5])
+            self.assertEqual([i for i in ctrl.queue if i != 5], [3, 4])
+            ctrl.queue.remove(5)
+        ctrl.sync([1, 3])
+        self.assertEqual((ctrl.played, ctrl.queue), ([1], [3]))
+
+    def test_play_next(self):
+        ctrl = PlaybackControl(queue=[3, 4, 5], played=[1, 2])
+        ctrl.play_next(5)
+        self.assertEqual(ctrl.queue, [5, 3, 4])
+        ctrl.play_next(1)
+        self.assertEqual(ctrl.queue, [1, 5, 3, 4])
+        self.assertEqual(ctrl.take_next([1, 2, 3, 4, 5]), 1)
+
+    def test_upcoming(self):
+        a, b = make_shader(), make_shader()
+        start = datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc)
+        ctrl = PlaybackControl(queue=[b.id, 999, a.id], started_at=start)
+        self.assertEqual([(s, eta.minute, eta.second) for s, eta in ctrl.upcoming()], [(b, 0, 30), (a, 1, 30)])
+        ctrl.started_at = None
+        self.assertEqual(ctrl.upcoming(), [(b, None), (a, None)])
+
+    def test_api(self):
+        a, b = make_shader(title="A", is_playing=True), make_shader(title="B")
+        PlaybackControl.objects.create(pk=1, queue=[b.id], started_at=datetime(2026, 12, 1, 20, 0, tzinfo=timezone.utc))
+        self.assertEqual(self.client.get("/api/playlist").json(), {
+            "now_playing": {"ident": a.ident, "title": "A", "author": "a"},
+            "upcoming": [{"ident": b.ident, "title": "B", "author": "a", "eta": "~12:00 PM"}]
+        })
+        resp = self.client.get("/")
+        self.assertContains(resp, "<td class=\"tableCell\"> Now </td>", html=True)
+        self.assertContains(resp, "<td class=\"tableCell\"> ~12:00 PM </td>", html=True)
+
+
+class RunnerTests(TestCase):
+    def setUp(self):
+        import runner_process
+        self.runner = runner_process
+
+    def test_record_compile(self):
+        shader = make_shader()
+        for _ in range(3):
+            self.runner.record_compile(shader.id, "oops")
+        shader.refresh_from_db()
+        self.assertEqual((shader.compile_failures, shader.compile_error, shader.is_playable), (3, "oops", False))
+        Shader.objects.filter(pk=shader.pk).update(is_playable=True)
+        self.runner.record_compile(shader.id, None)
+        shader.refresh_from_db()
+        self.assertEqual((shader.compile_failures, shader.compile_error, shader.is_playable), (0, "", True))
+
+    def test_refresh_play_now(self):
+        a, b, off = make_shader(), make_shader(), make_shader(is_playable=False)
+        ctrl = PlaybackControl.objects.create(pk=1, queue=[a.id, b.id])
+        self.assertFalse(self.runner.refresh(ctrl))
+        PlaybackControl.objects.filter(pk=1).update(force_shader=b)
+        self.assertTrue(self.runner.refresh(ctrl))
+        self.assertEqual(PlaybackControl.objects.get(pk=1).queue, [b.id, a.id])
+        self.assertIsNone(PlaybackControl.objects.get(pk=1).force_shader_id)
+        PlaybackControl.objects.filter(pk=1).update(force_shader=off)
+        self.assertFalse(self.runner.refresh(ctrl))
+        self.assertIsNone(PlaybackControl.objects.get(pk=1).force_shader_id)

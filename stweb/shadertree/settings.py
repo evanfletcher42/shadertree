@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -127,6 +128,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # How long each shader runs on the tree; the editor preview loops over the same period
 SHADER_PLAY_SECONDS = 30
+
+# Consecutive failed compiles on the tree before a shader is taken off it
+SHADER_MAX_COMPILE_FAILURES = 3
+
+# SHADERTREE_NO_USB=1 runs the runner without the LED boards (runshader --no-usb)
+RUNSHADER_NO_USB = os.environ.get("SHADERTREE_NO_USB") == "1"
 
 # LED light output is color^LED_GAMMA (runshader.cpp WriteUsb); the editor preview reproduces it
 LED_GAMMA = 1.7

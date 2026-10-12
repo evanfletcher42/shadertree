@@ -1,68 +1,31 @@
 import os
-import django
-from django.db import transaction, IntegrityError, OperationalError, connection
-import sys
-import subprocess
-import random
-import time
+import signal
 import struct
+import subprocess
+import sys
+import threading
+import time
+from collections import deque
+from pathlib import Path
 
+import django
 
-def write_floats_file(data, f_path):
-    data_packed = struct.pack(f'{len(data)}f', *data)
-    with open(f_path, 'wb') as f:
-        f.write(data_packed)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shadertree.settings')
+django.setup()
 
-def init_django():
-    # sys.path.append(os.path.normpath('../stweb/'))
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shadertree.settings')
-    django.setup()
+from django.conf import settings
+from django.db import OperationalError, close_old_connections, connection, transaction
+from django.db.models import F
+from django.utils import timezone
+from shader_app.models import LedCoordsCfg, PlaybackControl, Shader, ShaderPrefix
 
+BASE_DIR = Path(__file__).resolve().parent
+RUNSHADER = BASE_DIR / "runshader"
+COMPILED_LINE = "Shader compiled successfully"
+COMPILE_FAILED_CODES = (1, 3)  # runshader: vertex shader compile, program link
+POLL_SECONDS = 0.1
 
-def runshader_interruptible(shader_text, timeout_seconds, should_interrupt, poll_seconds=0.1):
-    p = subprocess.Popen(
-        ["./runshader"],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    # send program and close stdin
-    p.stdin.write(shader_text.encode())
-    p.stdin.close()
-
-    start = time.monotonic()
-
-    while True:
-        rc = p.poll()
-        if rc is not None:
-            stdout = p.stdout.read().decode(errors="replace")
-            stderr = p.stderr.read().decode(errors="replace")
-            return {"interrupted": False, "timeout": False, "return_code": rc, "stdout": stdout, "stderr": stderr}
-
-        if should_interrupt():
-            p.terminate()
-            try:
-                p.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                p.kill()
-                p.wait()
-            stdout = p.stdout.read().decode(errors="replace")
-            stderr = p.stderr.read().decode(errors="replace")
-            return {"interrupted": True, "timeout": False, "return_code": p.returncode, "stdout": stdout, "stderr": stderr}
-
-        if (time.monotonic() - start) >= timeout_seconds:
-            p.terminate()
-            try:
-                p.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                p.kill()
-                p.wait()
-            stdout = p.stdout.read().decode(errors="replace")
-            stderr = p.stderr.read().decode(errors="replace")
-            return {"interrupted": False, "timeout": True, "return_code": p.returncode, "stdout": stdout, "stderr": stderr}
-
-        time.sleep(poll_seconds)
+_last_coords = None
 
 
 def sqlite_enable_wal():
@@ -73,84 +36,191 @@ def sqlite_enable_wal():
         c.execute("PRAGMA synchronous=NORMAL;")
 
 
+def write_coords():
+    """Write ledcoords.dat for runshader. False if no coordinates are configured."""
+    global _last_coords
+    cfg = LedCoordsCfg.objects.first()
+    if cfg is None:
+        return False
+    if cfg.content != _last_coords:
+        with open(BASE_DIR / "ledcoords.dat", 'wb') as f:
+            f.write(struct.pack(f'{len(cfg.content)}f', *cfg.content))
+        _last_coords = cfg.content
+    return True
+
+
+def playable_ids():
+    return list(Shader.objects.filter(is_deleted=False, is_playable=True).values_list("id", flat=True))
+
+
+def take_play_now():
+    """Clear a pending play-now request and return its shader id."""
+    shader_id = PlaybackControl.objects.filter(pk=1).values_list("force_shader_id", flat=True).first()
+    if shader_id is None:
+        return None
+    # only clear the request we read; a newer one is picked up on the next poll
+    if not PlaybackControl.objects.filter(pk=1, force_shader_id=shader_id).update(force_shader=None):
+        return None
+    return shader_id
+
+
+def refresh(ctrl):
+    """Sync the playlist with the playable shaders and apply any play-now. True if a play-now was applied."""
+    close_old_connections()
+    playable = playable_ids()
+    before = (list(ctrl.queue), list(ctrl.played))
+    ctrl.sync(playable)
+    forced = take_play_now()
+    applied = forced in playable
+    if applied:
+        ctrl.play_next(forced)
+    if (ctrl.queue, ctrl.played) != before:
+        ctrl.save(update_fields=["queue", "played"])
+    return applied
+
+
+def set_now_playing(shader_id):
+    with transaction.atomic():
+        Shader.objects.filter(is_playing=True).update(is_playing=False)
+        if shader_id is not None:
+            Shader.objects.filter(pk=shader_id).update(is_playing=True)
+
+
+def record_compile(shader_id, error):
+    """Track consecutive compile failures and take the shader off the tree after too many."""
+    shaders = Shader.objects.filter(pk=shader_id)
+    if error is None:
+        shaders.update(compile_failures=0, compile_error="")
+        return
+    shaders.update(compile_failures=F("compile_failures") + 1, compile_error=error)
+    shaders.filter(compile_failures__gte=settings.SHADER_MAX_COMPILE_FAILURES).update(is_playable=False)
+
+
+def stop_process(p):
+    p.terminate()
+    try:
+        p.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.wait()
+
+
+def run_shader(program_text, on_compiled, should_stop):
+    """Run one slot of runshader. Returns (compiled, stopped by us, return code, stderr tail)."""
+    args = [str(RUNSHADER)] + (["--no-usb"] if settings.RUNSHADER_NO_USB else [])
+    p = subprocess.Popen(args, cwd=BASE_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, errors="replace")
+
+    # drain both pipes so per-frame GL error spam can't block runshader
+    compiled = threading.Event()
+    stderr_tail = deque(maxlen=200)
+
+    def read_stdout():
+        for line in p.stdout:
+            if line.rstrip() == COMPILED_LINE:
+                compiled.set()
+
+    readers = [threading.Thread(target=read_stdout, daemon=True),
+               threading.Thread(target=stderr_tail.extend, args=(p.stderr,), daemon=True)]
+    for t in readers:
+        t.start()
+
+    stopped = False
+    try:
+        try:
+            p.stdin.write(program_text)
+            p.stdin.close()
+        except BrokenPipeError:
+            pass
+
+        # the play time starts at compile; until then this also bounds a hung compile
+        deadline = time.monotonic() + settings.SHADER_PLAY_SECONDS
+        started = False
+        while p.poll() is None:
+            if compiled.is_set() and not started:
+                started = True
+                on_compiled()
+                deadline = time.monotonic() + settings.SHADER_PLAY_SECONDS
+            if time.monotonic() >= deadline or should_stop():
+                stopped = True
+                break
+            time.sleep(POLL_SECONDS)
+    finally:
+        if p.poll() is None:
+            stop_process(p)
+        for t in readers:
+            t.join()
+
+    return compiled.is_set(), stopped, p.returncode, "".join(stderr_tail)
+
+
+def play_one(ctrl):
+
+    refresh(ctrl)
+    shader_id = ctrl.take_next(playable_ids())
+    if shader_id is None:
+        print("No shaders available")
+        time.sleep(1)
+        return
+    ctrl.started_at = timezone.now()
+    ctrl.save(update_fields=["queue", "played", "started_at"])
+
+    shader = Shader.objects.filter(pk=shader_id).first()
+    version = shader.versions.order_by('-created_at').first() if shader else None
+    if version is None:
+        print("Failed to load shader text for shader id:", shader_id)
+        time.sleep(1)
+        return
+
+    if not write_coords():
+        print("No LED coordinates configured")
+        time.sleep(1)
+        return
+
+    print("Running:", shader)
+
+    def on_compiled():
+        ctrl.started_at = timezone.now()
+        ctrl.save(update_fields=["started_at"])
+        set_now_playing(shader.id)
+
+    def should_stop():
+        return refresh(ctrl) or shader.id not in ctrl.played
+
+    program_text = ShaderPrefix.program_prefix() + version.content
+    compiled, stopped, return_code, stderr = run_shader(program_text, on_compiled, should_stop)
+
+    if return_code in COMPILE_FAILED_CODES:
+        record_compile(shader.id, stderr)
+    elif compiled:
+        record_compile(shader.id, None)
+
+    if not stopped:
+        set_now_playing(None)
+        print(f"runshader exited early (rc={return_code}): {shader}\n{stderr}")
+        time.sleep(1)
+
+
 def main():
-    init_django()
+    sys.stdout.reconfigure(line_buffering=True)
     sqlite_enable_wal()
 
-    from django.conf import settings
-    from shader_app.models import Shader, ShaderVersion, ShaderPrefix, LedCoordsCfg
-    from shader_app.playback import get_ctrl_values, consume_override_if_new
+    # run the finally below on SIGTERM too
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
-    last_id = None
-    last_seen_nonce = 0
-
-    while True:
-        # --- if someone requested a shader, consume it and play it now ---
-        try:
-            forced_shader, last_seen_nonce = consume_override_if_new(last_seen_nonce)
-        except OperationalError as e:
-            # sqlite transient lock; back off a hair and retry loop
-            time.sleep(0.05)
-            continue
-
-        if forced_shader is not None:
-            shader = forced_shader
-        else:
-            # --- your existing random selection logic ---
-            qs = Shader.objects.filter(is_deleted=False, is_playable=True)
-            n_shaders = qs.count()
-            if n_shaders == 0:
-                print("No shaders available")
+    ctrl = PlaybackControl.get()
+    set_now_playing(None)
+    try:
+        while True:
+            try:
+                play_one(ctrl)
+            except OperationalError as e:
+                print("Database error:", e)
                 time.sleep(1)
-                continue
-
-            if n_shaders == 1:
-                shader = qs.first()
-            else:
-                if last_id:
-                    qs = qs.exclude(id=last_id)
-                n_shaders = qs.count()
-                shader = qs.all()[random.randint(0, n_shaders - 1)]
-                last_id = shader.id
-
-        # --- load shader text (your existing logic) ---
-        latest_shader_version = shader.versions.order_by('-created_at').first()
-        if not latest_shader_version:
-            print("Failed to load shader text for shader:", shader)
-            continue
-        shader_text = latest_shader_version.content
-
-        # --- LED config + file write (your existing logic) ---
-        coords_obj = LedCoordsCfg.objects.first()
-        coords_list = coords_obj.content
-        write_floats_file(coords_list, "ledcoords.dat")
-
-        # --- mark now playing (your existing logic) ---
-        Shader.objects.filter(is_playing=True).update(is_playing=False)
-        shader.is_playing = True
-        shader.save()
-
-        # --- run shader, interrupt if nonce changes ---
-        program_text = ShaderPrefix.program_prefix() + shader_text
-
-        print("Running:", shader)
-
-        def should_interrupt():
-            nonlocal last_seen_nonce
-            shader_id, nonce = get_ctrl_values()
-
-            # Only interrupt if a shader is actually pending AND nonce changed
-            if shader_id is None:
-                # Still update our marker if we missed an update (optional but helpful)
-                last_seen_nonce = max(last_seen_nonce, nonce)
-                return False
-
-            return nonce != last_seen_nonce
-
-        result = runshader_interruptible(program_text, settings.SHADER_PLAY_SECONDS, should_interrupt, poll_seconds=0.1)
-        if not result["interrupted"] and not result["timeout"]:
-            print(f"runshader exited early (rc={result['return_code']}): {shader}\n{result['stderr']}", flush=True)
-            time.sleep(1)
+                ctrl.refresh_from_db()
+    finally:
+        set_now_playing(None)
+        PlaybackControl.objects.filter(pk=1).update(started_at=None)
 
 
 if __name__ == "__main__":

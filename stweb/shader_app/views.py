@@ -3,18 +3,34 @@ from django.http import HttpResponse, JsonResponse, Http404
 from django.template import loader
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.db import transaction
-from django.db.models import F
 from django.conf import settings
+from django.utils import timezone
+from django.utils.dateformat import time_format
 from .utils import get_client_ip
 from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, PlaybackControl
 import json
 
+def eta_text(eta):
+    return "~" + time_format(timezone.localtime(eta), "g:i A") if eta else ""
+
+def next_plays():
+    """Shader id -> when it next plays on the tree, as display text."""
+    texts = {s.id: eta_text(eta) for s, eta in PlaybackControl.get().upcoming()}
+    for shader_id in Shader.objects.filter(is_playing=True).values_list("id", flat=True):
+        texts[shader_id] = "Now"
+    return texts
+
+def shader_info(shader):
+    return {"ident": shader.ident, "title": shader.title, "author": shader.author}
+
 def index(request):
     template = loader.get_template("shader_app/index.html")
 
-    shaders = Shader.objects.filter(is_deleted=False).order_by('created_at').values('title', 'author', 'created_at', 'ident', 'is_playable')
+    shaders = Shader.objects.filter(is_deleted=False).order_by('created_at').values('id', 'title', 'author', 'created_at', 'ident', 'is_playable')
     shader_list = list(shaders)  # QuerySet->List
+    plays = next_plays()
+    for s in shader_list:
+        s["next_play"] = plays.get(s["id"], "")
 
     context = {
         "shaders": shader_list,
@@ -51,6 +67,13 @@ def edit_new(request):
     })
 
 
+def editor_next_play(shader):
+    text = next_plays().get(shader.id, "")
+    if text == "Now":
+        return "Playing on the tree now."
+    return f"Plays next on the tree at {text}." if text else ""
+
+
 def edit_existing(request, shader_ident):
     shader = get_object_or_404(Shader, ident=shader_ident, is_deleted=False)
     latest_shader_version = shader.versions.order_by('-created_at').first()
@@ -59,7 +82,10 @@ def edit_existing(request, shader_ident):
         "shadertitle": shader.title,
         "shaderauthor": shader.author,
         "shaderplayable": shader.is_playable,
-        "editortext": latest_shader_version.content if latest_shader_version else ""
+        "editortext": latest_shader_version.content if latest_shader_version else "",
+        "nextplay": editor_next_play(shader),
+        "compileerror": shader.compile_error,
+        "takenoff": not shader.is_playable and shader.compile_failures >= settings.SHADER_MAX_COMPILE_FAILURES,
     })
 
 
@@ -118,11 +144,15 @@ def api_edit_shader(request):
                 'message': 'Requested shader not found'
                 }, status=404)
 
-        # set fields
-        shader.title = shader_title
-        shader.author = shader_author
-        shader.is_playable = shader_playable
-        shader.save()
+        # update() so a concurrent runner write to is_playing isn't clobbered
+        # a new version gets a fresh set of compile attempts on the tree
+        Shader.objects.filter(pk=shader.pk).update(
+            title=shader_title,
+            author=shader_author,
+            is_playable=shader_playable,
+            compile_failures=0,
+            compile_error=""
+        )
 
         # new ShaderVersion
         ShaderVersion.objects.create(
@@ -164,8 +194,7 @@ def api_delete_shader(request):
         content="// Shader deleted"
     )
 
-    shader.is_deleted = True
-    shader.save()
+    Shader.objects.filter(pk=shader.pk).update(is_deleted=True)
 
     return JsonResponse({
             'message': 'Shader deleted successfully',
@@ -195,17 +224,20 @@ def api_now_playing(request):
         }
     return JsonResponse(data)
 
+@require_GET
+def api_playlist(request):
+    playing = Shader.objects.filter(is_playing=True).first()
+    return JsonResponse({
+        "now_playing": shader_info(playing) if playing else None,
+        "upcoming": [dict(shader_info(s), eta=eta_text(eta)) for s, eta in PlaybackControl.get().upcoming()]
+    })
+
 @require_POST
 def play_now(request, ident: str):
     shader = get_object_or_404(Shader, ident=ident, is_deleted=False, is_playable=True)
 
-    # ensure singleton exists.
-    PlaybackControl.objects.get_or_create(pk=1)
-
-    with transaction.atomic():
-        PlaybackControl.objects.filter(pk=1).update(
-            force_shader_id=shader.id,          # <-- IMPORTANT
-            force_nonce=F("force_nonce") + 1,
-        )
+    # update() only touches the request; the runner owns the playlist fields
+    PlaybackControl.get()
+    PlaybackControl.objects.filter(pk=1).update(force_shader_id=shader.id)
 
     return JsonResponse({"ok": True, "ident": shader.ident, "title": shader.title})

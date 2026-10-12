@@ -1,4 +1,7 @@
+import random
 from collections import Counter
+from datetime import timedelta
+from django.conf import settings
 from django.db import models
 from django.utils.crypto import get_random_string
 from django.core.exceptions import ValidationError
@@ -15,6 +18,8 @@ class Shader(models.Model):
     is_playable = models.BooleanField(default=False)  # whether this shader should run on the tree
     is_deleted = models.BooleanField(default=False)  # soft deletion flag
     is_playing = models.BooleanField(default=False)
+    compile_failures = models.PositiveIntegerField(default=0)  # consecutive failed compiles on the tree
+    compile_error = models.TextField(blank=True)  # last tree compile error, shown in the editor
 
     def save(self, *args, **kwargs):
         if not self.ident:
@@ -135,5 +140,47 @@ class PlaybackControl(models.Model):
     force_shader = models.ForeignKey(
         "Shader", null=True, blank=True, on_delete=models.SET_NULL
     )
-    force_nonce = models.BigIntegerField(default=0)  # increments on each request
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Shuffled cycle. Only the runner writes these.
+    queue = models.JSONField(default=list)  # shader ids still to play, in order
+    played = models.JSONField(default=list)  # shader ids played this cycle, current last
+    started_at = models.DateTimeField(null=True, blank=True)  # start of the current shader; null when the runner is stopped
+
+    @staticmethod
+    def get():
+        return PlaybackControl.objects.get_or_create(pk=1)[0]
+
+    def sync(self, playable_ids):
+        """Drop shaders that stopped being playable and slot new ones in later this cycle."""
+        playable = set(playable_ids)
+        self.queue = [i for i in self.queue if i in playable]
+        self.played = [i for i in self.played if i in playable]
+        for i in playable - set(self.queue) - set(self.played):
+            self.queue.insert(random.randint(0, len(self.queue)), i)
+
+    def take_next(self, playable_ids):
+        """Pop the next shader id, reshuffling when the cycle is done. None if nothing is playable."""
+        if not self.queue:
+            last = self.played[-1] if self.played else None
+            self.queue = random.sample(list(playable_ids), len(playable_ids))
+            if len(self.queue) > 1 and self.queue[0] == last:
+                self.queue.append(self.queue.pop(0))
+            self.played = []
+        if not self.queue:
+            return None
+        shader_id = self.queue.pop(0)
+        self.played.append(shader_id)
+        return shader_id
+
+    def play_next(self, shader_id):
+        if shader_id in self.queue:
+            self.queue.remove(shader_id)
+        self.queue.insert(0, shader_id)
+
+    def upcoming(self):
+        """(shader, estimated start) pairs, soonest first. The estimate is None while the runner is stopped."""
+        shaders = Shader.objects.in_bulk(self.queue)
+        duration = timedelta(seconds=settings.SHADER_PLAY_SECONDS)
+        return [(shaders[i], self.started_at + duration * (n + 1) if self.started_at else None)
+                for n, i in enumerate(self.queue) if i in shaders]

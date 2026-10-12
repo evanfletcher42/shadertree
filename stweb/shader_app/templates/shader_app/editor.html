@@ -60,6 +60,13 @@
                         <input type="checkbox" name="isPlayable" id="is_playable" {% if shaderplayable %}checked{% endif %}>
                         <label for="is_playable">Run this shader on the physical tree</label>
                     </div>
+                    {% if nextplay %}<div>{{ nextplay }}</div>{% endif %}
+                    {% if compileerror %}
+                    <div class="error">
+                        <p>The tree failed to compile this shader{% if takenoff %}, so it was taken off the tree{% endif %}. Fix it and save to try again.</p>
+                        <pre style="white-space: pre-wrap;">{{ compileerror }}</pre>
+                    </div>
+                    {% endif %}
                     <div class="button-container">
                         <div style="display: flex; align-items: flex-end;">
                             <button id="saveButton">Save</button>

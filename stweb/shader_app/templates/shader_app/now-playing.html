@@ -41,6 +41,11 @@
             margin-bottom: -1em;
         }
 
+        .upnext-section {
+            font-size: 2.5em;
+            color: #A0A0A0;
+        }
+
         .bottom-section p {
             font-size: 4em;
         }
@@ -65,6 +70,9 @@
             <h1 id="title">Default Title</h1>
             <p class="author-section" id="author">By Default Author</p>
         </div>
+
+        <!-- Up Next Section -->
+        <div class="section upnext-section" id="upNext"></div>
 
         <!-- Bottom Section -->
         <div class="section bottom-section">
@@ -100,14 +108,25 @@
         return cookieValue;
     }
 
+    const UP_NEXT_COUNT = 3;
+
     async function updateNowPlaying() {
         try {
-            const response = await fetch('/api/now_playing');
+            const response = await fetch('/api/playlist');
             if (!response.ok) throw new Error(`Response status: (${response.status})`);
             const data = await response.json();
 
-            document.getElementById('title').textContent = data.now_playing || 'Title Unavailable';
-            document.getElementById('author').textContent = `By ${data.author || 'Author Unavailable'}`;
+            const playing = data.now_playing || {};
+            document.getElementById('title').textContent = playing.title || 'Title Unavailable';
+            document.getElementById('author').textContent = `By ${playing.author || 'Author Unavailable'}`;
+
+            const upNext = document.getElementById('upNext');
+            upNext.replaceChildren();
+            for (const s of data.upcoming.slice(0, UP_NEXT_COUNT)) {
+                const line = document.createElement('div');
+                line.textContent = `${s.eta} ${s.title} by ${s.author}`.trim();
+                upNext.appendChild(line);
+            }
         } catch (error) {
             console.error('Failed to fetch now playing information:', error);
         }

@@ -46,9 +46,25 @@
             color: #A0A0A0;
         }
 
+        .upnext-section table {
+            margin: 0 auto;
+            border-collapse: collapse;
+        }
+
+        .upnext-section td {
+            padding: 0.1em 0.4em;
+            vertical-align: middle;
+            text-align: left;
+        }
+
+        .upnext-section td.eta {
+            text-align: right;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
         .upnext-section button.playNowButton {
             font-size: 0.6em;
-            vertical-align: middle;
         }
 
         .bottom-section p {
@@ -77,7 +93,9 @@
         </div>
 
         <!-- Up Next Section -->
-        <div class="section upnext-section" id="upNext"></div>
+        <div class="section upnext-section">
+            <table id="upNext"></table>
+        </div>
 
         <!-- Bottom Section -->
         <div class="section bottom-section">
@@ -108,10 +126,12 @@
         const upNext = document.getElementById('upNext');
         upNext.replaceChildren();
         for (const s of data.upcoming.slice(0, UP_NEXT_COUNT)) {
-            const line = document.createElement('div');
-            line.textContent = `${s.eta} ${s.title} by ${s.author} `.trimStart();
-            line.appendChild(makePlayNowButton(s.ident));
-            upNext.appendChild(line);
+            const row = upNext.insertRow();
+            const eta = row.insertCell();
+            eta.className = 'eta';
+            eta.textContent = s.eta;
+            row.insertCell().textContent = `${s.title} by ${s.author}`;
+            row.insertCell().appendChild(makePlayNowButton(s.ident));
         }
     }
 

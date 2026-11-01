@@ -75,7 +75,7 @@ sudo install -m 644 deploy/gunicorn.service deploy/shadertree-runner.service \
 sudo systemctl daemon-reload
 sudo systemctl enable gunicorn shadertree-runner shadertree-backup.timer
 # SteamOS 3.9 runs firewalld, which drops incoming connections to port 80
-if sudo firewall-cmd --state >/dev/null 2>&1; then
+if sudo firewall-cmd --state >/dev/null 2>&1 && ! sudo firewall-cmd --permanent --query-service=http >/dev/null; then
     sudo firewall-cmd --permanent --add-service=http >/dev/null
     sudo firewall-cmd --reload >/dev/null
 fi
@@ -83,7 +83,8 @@ fi
 sudo loginctl enable-linger "$USER"
 
 # Pulled here so it uses this shell's proxy settings, not the service manager's
-podman pull "$(sed -n 's/^Image=//p' deploy/shadertree-nginx.container)"
+NGINX_IMAGE=$(sed -n 's/^Image=//p' deploy/shadertree-nginx.container)
+podman image exists "$NGINX_IMAGE" || podman pull "$NGINX_IMAGE"
 mkdir -p ~/.config/containers/systemd ~/.config/shadertree
 install -m 644 deploy/shadertree-nginx.container ~/.config/containers/systemd/
 install -m 644 deploy/nginx-shadertree.conf ~/.config/shadertree/nginx.conf

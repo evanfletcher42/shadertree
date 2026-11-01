@@ -144,6 +144,20 @@ static bool CreateGLContext()
         fprintf( stderr, "EGL context failed: 0x%x\n", eglGetError() );
         return false;
     }
+
+    // Without a surface there is no default framebuffer, and draws fail even with rasterizer discard
+    GLuint renderbuffer, framebuffer;
+    glGenRenderbuffers( 1, &renderbuffer );
+    glBindRenderbuffer( GL_RENDERBUFFER, renderbuffer );
+    glRenderbufferStorage( GL_RENDERBUFFER, GL_RGBA8, 1, 1 );
+    glGenFramebuffers( 1, &framebuffer );
+    glBindFramebuffer( GL_FRAMEBUFFER, framebuffer );
+    glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderbuffer );
+    if ( glCheckFramebufferStatus( GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE )
+    {
+        fprintf( stderr, "Framebuffer incomplete\n" );
+        return false;
+    }
     return true;
 }
 

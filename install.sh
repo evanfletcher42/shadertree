@@ -86,13 +86,20 @@ sudo loginctl enable-linger "$USER"
 NGINX_IMAGE=$(sed -n 's/^Image=//p' deploy/shadertree-nginx.container)
 podman image exists "$NGINX_IMAGE" || podman pull "$NGINX_IMAGE"
 mkdir -p ~/.config/containers/systemd ~/.config/shadertree
+NGINX_CHANGED=
+if ! cmp -s deploy/shadertree-nginx.container ~/.config/containers/systemd/shadertree-nginx.container ||
+    ! cmp -s deploy/nginx-shadertree.conf ~/.config/shadertree/nginx.conf; then
+    NGINX_CHANGED=1
+fi
 install -m 644 deploy/shadertree-nginx.container ~/.config/containers/systemd/
 install -m 644 deploy/nginx-shadertree.conf ~/.config/shadertree/nginx.conf
 systemctl --user daemon-reload
 
 ./deploy.sh
 sudo systemctl start shadertree-backup.timer
-systemctl --user restart shadertree-nginx
+if [ -n "$NGINX_CHANGED" ] || ! systemctl --user is-active --quiet shadertree-nginx; then
+    systemctl --user restart shadertree-nginx
+fi
 
 if grep -q '^SHADERTREE_ALLOWED_HOSTS=$' "$PROD_DIR/local.env"; then
     echo "Next: set SHADERTREE_ALLOWED_HOSTS in $PROD_DIR/local.env, then run: sudo systemctl restart gunicorn"

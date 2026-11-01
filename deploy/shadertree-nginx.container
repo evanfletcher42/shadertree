@@ -7,6 +7,10 @@ Network=host
 Volume=%h/.config/shadertree/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 Volume=/var/www/shadertree/static:/var/www/shadertree/static:ro
 
+[Quadlet]
+# Skips network-online.target
+DefaultDependencies=false
+
 [Service]
 Restart=always
 

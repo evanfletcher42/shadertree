@@ -19,14 +19,19 @@ done
 
 # Building runshader needs a compiler and headers. SteamOS ships neither, and updates remove them.
 if ! command -v g++ >/dev/null || [ ! -e /usr/include/stdio.h ] || [ ! -e /usr/include/EGL/egl.h ] || [ ! -e /usr/include/libusb-1.0/libusb.h ]; then
-    # sudo drops proxy settings unless asked to keep them
-    SUDO_NET="sudo --preserve-env=http_proxy,https_proxy,HTTP_PROXY,HTTPS_PROXY,no_proxy,NO_PROXY"
+    # pacman runs as root, whose environment can carry its own proxy settings. Give it exactly ours.
+    SUDO_NET=(sudo env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u no_proxy -u NO_PROXY)
+    for var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY; do
+        if [ -n "${!var}" ]; then
+            SUDO_NET+=("$var=${!var}")
+        fi
+    done
     sudo steamos-readonly disable
     sudo pacman-key --init
     sudo pacman-key --populate
-    $SUDO_NET pacman -Sy --noconfirm --needed base-devel
+    "${SUDO_NET[@]}" pacman -Sy --noconfirm --needed base-devel
     # Reinstalled, not skipped, because SteamOS strips their headers
-    $SUDO_NET pacman -S --noconfirm glibc linux-api-headers libglvnd libusb
+    "${SUDO_NET[@]}" pacman -S --noconfirm glibc linux-api-headers libglvnd libusb
     sudo steamos-readonly enable
 fi
 

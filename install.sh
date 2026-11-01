@@ -3,12 +3,12 @@
 # Safe to re-run. Run it again after every SteamOS update: updates can remove what it puts in /etc.
 # Usage: ./install.sh [--import-db PATH]   (PATH: a database or backup, used only if production has none)
 set -e
-cd "$(dirname "$0")"
-PROD_DIR=/var/www/shadertree
 IMPORT_DB=
 if [ "$1" = "--import-db" ]; then
-    IMPORT_DB=$2
+    IMPORT_DB=$(realpath -e "$2")
 fi
+cd "$(dirname "$0")"
+PROD_DIR=/var/www/shadertree
 
 for tool in podman python3 rsync; do
     if ! command -v $tool >/dev/null; then

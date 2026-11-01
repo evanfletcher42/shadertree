@@ -14,7 +14,7 @@ rsync -av --delete \
     --exclude='/db.sqlite3*' \
     --exclude='/secret_key.txt' \
     --exclude='/static/' \
-    --exclude='/backups/' \
+    --exclude='/backups' \
     --exclude='/*.dat' \
     --exclude='/shadertree.sock' \
     stweb/ "$PROD_DIR"

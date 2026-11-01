@@ -35,7 +35,13 @@ Environment=SHADERTREE_NO_USB=1
 
 ### Backups
 
-`/var/www/shadertree/backups/` holds hourly copies of the database, plus one from every deploy. The newest 168 are kept. Copy them off the Deck now and then.
+`/var/www/shadertree/backups/` holds hourly copies of the database, plus one from every deploy. The newest 168 are kept (about 2 MB each). Copy them off the Deck now and then.
+
+The Deck's `/var` partition is only 230 MB, so make `backups` a link into `/home` before enabling the timer:
+```
+mkdir -p ~/shadertree-backups
+ln -s ~/shadertree-backups /var/www/shadertree/backups
+```
 
 To restore one: `sudo systemctl stop gunicorn shadertree-runner`, copy the backup over `db.sqlite3`, delete `db.sqlite3-wal` and `db.sqlite3-shm`, then start both services again.
 

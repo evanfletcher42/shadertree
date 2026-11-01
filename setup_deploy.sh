@@ -10,7 +10,7 @@ if [[ "$answer" != "$(hostname)" ]]; then
     exit 1
 fi
 
-rsync -av --exclude='/venv/' --exclude='/secret_key.txt' --exclude='/backups/' stweb/ "$PROD_DIR"
+rsync -av --exclude='/venv/' --exclude='/secret_key.txt' --exclude='/backups' stweb/ "$PROD_DIR"
 python3 -m venv "$PROD_DIR/venv"
 "$PROD_DIR/venv/bin/pip" install --upgrade pip
 "$PROD_DIR/venv/bin/pip" install -r "$PROD_DIR/requirements.txt"

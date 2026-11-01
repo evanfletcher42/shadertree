@@ -1,48 +1,28 @@
 #!/bin/bash
-
-DEV_DIR=./stweb/
+# Deploys this checkout to the production dir and restarts the site and the runner.
+set -e
+cd "$(dirname "$0")"
 PROD_DIR=/var/www/shadertree/
-VENV_DIR=$PROD_DIR/venv
-SERVICE_NAME=gunicorn
-DB_FILE="db.sqlite3"  # Change this if your database file has a different name or path
 
-echo "Starting deployment..."
+make
 
-# Step 1: Sync files from development to production, excluding venv, pyc files, __pycache__, and the database file
-echo "Syncing files from $DEV_DIR to $PROD_DIR..."
-rsync -av \
-    --exclude='venv' \
+# --delete removes files that are gone from stweb/. Excluded paths exist only in production and are kept.
+rsync -av --delete \
+    --exclude='/venv/' \
+    --exclude='__pycache__/' \
     --exclude='*.pyc' \
-    --exclude='__pycache__' \
-    --exclude="$DB_FILE" \
-    "$DEV_DIR" "$PROD_DIR"
+    --exclude='/db.sqlite3*' \
+    --exclude='/secret_key.txt' \
+    --exclude='/static/' \
+    --exclude='/backups/' \
+    --exclude='/*.dat' \
+    --exclude='/shadertree.sock' \
+    stweb/ "$PROD_DIR"
 
-# Step 2: Activate virtual environment
-echo "Activating virtual environment..."
-source "$VENV_DIR/bin/activate"
-
-# Step 3: Navigate to production directory
-pushd "$PROD_DIR" || { echo "Failed to navigate to $PROD_DIR"; exit 1; }
-
-# Step 4: Upgrade pip and install dependencies
-echo "Upgrading pip and installing dependencies..."
-#pip install --upgrade pip
-#pip install -r requirements.txt
-
-# Step 5: Apply database migrations
-echo "Applying database migrations..."
-python manage.py migrate
-
-# Step 6: Collect static files
-echo "Collecting static files..."
-python manage.py collectstatic --noinput
-
-# Step 7: Deactivate virtual environment
-deactivate
-
-# Step 8: Restart Gunicorn service
-echo "Restarting Gunicorn service..."
-sudo systemctl restart "$SERVICE_NAME"
-
-popd
+cd "$PROD_DIR"
+venv/bin/python manage.py backup_db
+venv/bin/pip install -r requirements.txt
+venv/bin/python manage.py migrate
+venv/bin/python manage.py collectstatic --noinput
+sudo systemctl restart gunicorn shadertree-runner
 echo "Deployment completed successfully."

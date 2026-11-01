@@ -1,7 +1,15 @@
+import io
 import json
+import sqlite3
+import tempfile
+from contextlib import closing
 from datetime import datetime, timezone
+from pathlib import Path
+from unittest import mock
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.core.management import call_command
+from django.test import TestCase, TransactionTestCase
+from .management.commands import backup_db
 from .models import Shader, ShaderVersion, ShaderPrefix, LedCoordsCfg, PlaybackControl, BannedIP
 
 
@@ -14,10 +22,10 @@ def make_shader(**kwargs):
 
 
 class SaveApiTests(TestCase):
-    def save(self, **kwargs):
+    def save(self, headers={"REMOTE_ADDR": "10.0.0.1"}, **kwargs):
         body = {"shaderid": "", "title": "t", "author": "a", "playable": True, "shadertext": "void main() {}"}
         body.update(kwargs)
-        return self.client.post("/api/save", json.dumps(body), content_type="application/json", REMOTE_ADDR="10.0.0.1")
+        return self.client.post("/api/save", json.dumps(body), content_type="application/json", **headers)
 
     def test_new(self):
         resp = self.save()
@@ -61,6 +69,14 @@ class SaveApiTests(TestCase):
         BannedIP.objects.create(ip_address="10.0.0.1")
         self.assertEqual(self.save().status_code, 403)
         self.assertFalse(Shader.objects.exists())
+
+    def test_ip_behind_nginx(self):
+        BannedIP.objects.create(ip_address="10.0.0.1")
+        headers = {"REMOTE_ADDR": "127.0.0.1", "HTTP_X_REAL_IP": "10.0.0.1", "HTTP_X_FORWARDED_FOR": "10.0.0.2, 10.0.0.1"}
+        self.assertEqual(self.save(headers=headers).status_code, 403)
+        headers["HTTP_X_REAL_IP"] = "10.0.0.3"
+        self.assertEqual(self.save(headers=headers).status_code, 201)
+        self.assertEqual(ShaderVersion.objects.get().ip_addr, "10.0.0.3")
 
 
 class DeleteApiTests(TestCase):
@@ -287,3 +303,19 @@ class RunnerTests(TestCase):
         PlaybackControl.objects.filter(pk=1).update(force_shader=off)
         self.assertFalse(self.runner.refresh(ctrl))
         self.assertIsNone(PlaybackControl.objects.get(pk=1).force_shader_id)
+
+
+# TestCase would hold a write transaction open, and the backup waits on it forever
+class BackupTests(TransactionTestCase):
+    def test_backup_and_rotation(self):
+        make_shader(title="kept")
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for name in ("db-20000101-000000.sqlite3", "db-20000102-000000.sqlite3"):
+                (d / name).touch()
+            with mock.patch.object(backup_db, "BACKUP_DIR", d), mock.patch.object(backup_db, "KEEP", 2):
+                call_command("backup_db", stdout=io.StringIO())
+            old, new = sorted(d.glob("db-*.sqlite3"))
+            self.assertEqual(old.name, "db-20000102-000000.sqlite3")
+            with closing(sqlite3.connect(new)) as db:
+                self.assertEqual(db.execute("SELECT title FROM shader_app_shader").fetchall(), [("kept",)])

@@ -1,0 +1,8 @@
+[Unit]
+Description=Shadertree database backup
+
+[Service]
+Type=oneshot
+User=deck
+WorkingDirectory=/var/www/shadertree
+ExecStart=/var/www/shadertree/venv/bin/python manage.py backup_db

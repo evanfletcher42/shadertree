@@ -1,0 +1,13 @@
+[Unit]
+Description=Shadertree web site
+After=network.target
+
+[Service]
+User=deck
+Group=www-data
+WorkingDirectory=/var/www/shadertree
+ExecStart=/var/www/shadertree/venv/bin/gunicorn --access-logfile - --workers 3 --bind unix:/var/www/shadertree/shadertree.sock shadertree.wsgi:application
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

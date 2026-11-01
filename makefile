@@ -1,23 +1,25 @@
 # Makefile for compiling shader_runner on Arch Linux (Steam Deck)
 
 CXX = g++
-CXXFLAGS = -Wall -O2 -std=c++11 -g
+CXXFLAGS = -Wall -O2 -std=c++17 -g
 
 # Include paths (adjust if necessary)
 INCLUDES =
 
 # Libraries to link against
-LIBS = -lOSMesa -lGL -ldl -ludev -lusb-1.0
+LIBS = -lOSMesa -lGL -lusb-1.0
 
 # Source files
 SRCS = shaderrunner/runshader.cpp
 
 # Header files
-HDRS = shaderrunner/treeinterface.h
+HDRS = shaderrunner/x32breakoutdriver.h shaderrunner/os_generic.h
 
 # Output executable
 TARGET = shaderrunner/runshader
 COPY_DIR = stweb/runshader
+
+.PHONY: all copy install_udev_rules clean
 
 all: $(TARGET) copy
 

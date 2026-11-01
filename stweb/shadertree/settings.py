@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.management.utils import get_random_secret_key
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -20,13 +22,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '\'"cReha8{n7QaKcVp=Pz]D^=l:!L&7*d)]^3?ywyL%fY=!Z7Q$J9!o$Zc7&cTxzx`S=-FL$Y2My"!|;CfG&nsF%q"3TT^$FSY1\'l*GomqsAikjTv\'Omz?@EWt`;zQ41:'
+# Untracked and generated on first use, so every install gets its own key
+SECRET_KEY_FILE = BASE_DIR / 'secret_key.txt'
+if not SECRET_KEY_FILE.exists():
+    SECRET_KEY_FILE.write_text(get_random_secret_key())
+SECRET_KEY = SECRET_KEY_FILE.read_text().strip()
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['shadertree.valve.org', '127.0.0.1', 'localhost', '172.29.255.12', '192.168.1.217', 'shadertree.local']
+# Production adds its hostnames in a systemd drop-in, comma-separated (README)
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost'] + [h for h in os.environ.get('SHADERTREE_ALLOWED_HOSTS', '').split(',') if h]
 
 
 # Application definition

@@ -1,0 +1,13 @@
+[Unit]
+Description=Shadertree shader runner
+After=network.target
+
+[Service]
+User=deck
+WorkingDirectory=/var/www/shadertree
+ExecStart=/var/www/shadertree/venv/bin/python runner_process.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

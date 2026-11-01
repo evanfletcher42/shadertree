@@ -17,7 +17,10 @@
 #include <condition_variable>
 
 #define GL_GLEXT_PROTOTYPES 1
-#include <GL/osmesa.h>
+#define EGL_NO_X11
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GL/gl.h>
 #include <GL/glext.h>
 
 #define NR_LEDS_PER_STRAND	 (215)
@@ -108,6 +111,47 @@ GLuint linkProgram(GLuint vertexShader, GLuint fragmentShader)
     }
 
     return program;
+}
+
+static EGLDisplay s_eglDisplay = EGL_NO_DISPLAY;
+static EGLContext s_eglContext = EGL_NO_CONTEXT;
+
+// Surfaceless: needs no window or display server
+static bool CreateGLContext()
+{
+    s_eglDisplay = eglGetPlatformDisplay( EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, nullptr );
+    if ( s_eglDisplay == EGL_NO_DISPLAY || !eglInitialize( s_eglDisplay, nullptr, nullptr ) )
+    {
+        fprintf( stderr, "EGL surfaceless display failed: 0x%x\n", eglGetError() );
+        return false;
+    }
+
+    const EGLint contextAttribs[] =
+    {
+        EGL_CONTEXT_MAJOR_VERSION, 3,
+        EGL_CONTEXT_MINOR_VERSION, 3,
+        EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+        EGL_NONE
+    };
+    if ( !eglBindAPI( EGL_OPENGL_API ) )
+    {
+        fprintf( stderr, "eglBindAPI failed: 0x%x\n", eglGetError() );
+        return false;
+    }
+    s_eglContext = eglCreateContext( s_eglDisplay, EGL_NO_CONFIG_KHR, EGL_NO_CONTEXT, contextAttribs );
+    if ( s_eglContext == EGL_NO_CONTEXT || !eglMakeCurrent( s_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, s_eglContext ) )
+    {
+        fprintf( stderr, "EGL context failed: 0x%x\n", eglGetError() );
+        return false;
+    }
+    return true;
+}
+
+static void DestroyGLContext()
+{
+    eglMakeCurrent( s_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT );
+    eglDestroyContext( s_eglDisplay, s_eglContext );
+    eglTerminate( s_eglDisplay );
 }
 
 float *getLEDPositions(int &numLEDs)
@@ -245,47 +289,15 @@ int main(int argc, char* argv[])
         vertexShaderCode = oss.str();
     }
 
-    // ----- Create headless OpenGL context via OSMesa -----
-    int ctx_attribs[] = {
-        OSMESA_PROFILE,          
-        OSMESA_CORE_PROFILE,
-        OSMESA_CONTEXT_MAJOR_VERSION, 3,
-        OSMESA_CONTEXT_MINOR_VERSION, 3,
-        0
-    };
-
-    OSMesaContext ctx = OSMesaCreateContextAttribs(ctx_attribs, NULL);
-    if (!ctx)
-    {
-        fprintf(stderr, "OSMesaCreateContextAttribs failed\n");
+    if ( !CreateGLContext() )
         return -1;
-    }
-
-    // We never actually rasterize (we always enable GL_RASTERIZER_DISCARD),
-    // but OSMesa requires a buffer to attach. 1×1 RGBA is enough.
-    int width = 1, height = 1;
-    void *osmesaBuffer = malloc(width * height * 4); // 4 bytes per pixel (RGBA8)
-    if (!osmesaBuffer)
-    {
-        fprintf(stderr, "Failed to allocate OSMesa buffer\n");
-        OSMesaDestroyContext(ctx);
-        return -1;
-    }
-
-    if (!OSMesaMakeCurrent(ctx, osmesaBuffer, GL_UNSIGNED_BYTE, width, height))
-    {
-        fprintf(stderr, "OSMesaMakeCurrent failed\n");
-        free(osmesaBuffer);
-        OSMesaDestroyContext(ctx);
-        return -1;
-    }
-    // ----- End OSMesa init -----
+    printf( "GL renderer: %s\n", glGetString( GL_RENDERER ) );
 
     // Compile the user-supplied vertex shader
     GLuint vertexShader = compileShader(vertexShaderCode, GL_VERTEX_SHADER);
     if (vertexShader == 0)
     {
-        OSMesaDestroyContext(ctx);
+        DestroyGLContext();
         return 1;
     }
 
@@ -294,7 +306,7 @@ int main(int argc, char* argv[])
     GLuint fragmentShader = compileShader(fragmentShaderSource, GL_FRAGMENT_SHADER);
     if (fragmentShader == 0)
     {
-        OSMesaDestroyContext(ctx);
+        DestroyGLContext();
         return 2;
     }
 
@@ -302,7 +314,7 @@ int main(int argc, char* argv[])
     GLuint shaderProgram = linkProgram(vertexShader, fragmentShader);
     if (shaderProgram == 0)
     {
-        OSMesaDestroyContext(ctx);
+        DestroyGLContext();
         return 3;
     }
 
@@ -473,8 +485,7 @@ int main(int argc, char* argv[])
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    OSMesaDestroyContext(ctx);
-    free(osmesaBuffer);
+    DestroyGLContext();
 
     printf("Goodbye\n");
 

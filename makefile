@@ -7,7 +7,7 @@ CXXFLAGS = -Wall -O2 -std=c++17 -g
 INCLUDES =
 
 # Libraries to link against
-LIBS = -lOSMesa -lGL -lusb-1.0
+LIBS = -lEGL -lOpenGL -lusb-1.0
 
 # Source files
 SRCS = shaderrunner/runshader.cpp

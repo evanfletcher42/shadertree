@@ -2,48 +2,53 @@
 
 ## Running the site on the Deck
 
-The site (gunicorn behind nginx), the shader runner and an hourly database backup run as systemd services from `/var/www/shadertree/`. The unit files and the nginx config are in `deploy/`; they assume the `deck` user.
+A Steam Deck on SteamOS 3.9 or newer runs the site, the shader runner and an hourly database backup. Everything installs from this repository with one script. To build `runshader`, it installs a compiler and headers into SteamOS with pacman (turning read-only mode off and back on). SteamOS updates remove those, so the script is run again after each update.
 
-### First-time setup
+What runs where:
+- `/var/www/shadertree/`: the deployed site, its venv, database, settings (`local.env`) and secret key.
+- `~/shadertree-backups/`: database backups. `/var` is only 230 MB, so these live in `/home`.
+- systemd services: `gunicorn` (the site, on 127.0.0.1:8000), `shadertree-runner` (plays shaders on the tree) and `shadertree-backup.timer`.
+- A rootless podman container, `shadertree-nginx`, serves port 80.
 
-1. Install the build dependencies (`shaderrunner/setup_notes.txt`) and nginx, then `make install_udev_rules`.
-2. `./setup_deploy.sh` creates `/var/www/shadertree/` and its venv. It copies `stweb/` including the dev database, so it asks for the hostname first.
-3. Install and start the services:
-   ```
-   sudo cp deploy/*.service deploy/*.timer /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now gunicorn shadertree-runner shadertree-backup.timer
-   ```
-   Then `sudo systemctl edit gunicorn` and add the names the site is reached by (anything else gets a 400):
-   ```
-   [Service]
-   Environment=SHADERTREE_ALLOWED_HOSTS=shadertree.example.com,10.0.0.5
-   ```
-4. Copy `deploy/nginx-shadertree.conf` to `/etc/nginx/sites-enabled/shadertree.conf` and set `server_name` to the same names as `SHADERTREE_ALLOWED_HOSTS`. Make sure `/etc/nginx/nginx.conf` has `include /etc/nginx/sites-enabled/*;` in its `http` block. Then `sudo nginx -t && sudo systemctl reload nginx`.
+### Install
 
-### Deploying
-
-`./deploy.sh` builds `runshader`, syncs `stweb/` to `/var/www/shadertree/` (deleting files that are no longer in the repo), backs up the database, installs requirements, migrates, collects static files and restarts the site and the runner.
-
-Logs: `journalctl -u shadertree-runner -f` (or `-u gunicorn`).
-
-Without the LED boards attached, run `sudo systemctl edit shadertree-runner` and add:
+In desktop mode, open a terminal (Konsole) and run:
 ```
-[Service]
-Environment=SHADERTREE_NO_USB=1
+sudo passwd deck            # only if the deck user has no password yet
+git clone https://github.com/evanfletcher42/shadertree.git ~/shadertree
+cd ~/shadertree
+./install.sh
+```
+The first run installs the build tools and downloads the nginx container, which takes a few minutes. To start from an existing database or backup instead of an empty one, run `./install.sh --import-db path/to/db.sqlite3`.
+
+Then:
+1. Edit `/var/www/shadertree/local.env` and set `SHADERTREE_ALLOWED_HOSTS` to the names and IPs people use to reach the site, comma-separated (for example `shadertree.example.com,10.0.0.5`). Other names get a 400 error. Then `sudo systemctl restart gunicorn`.
+2. Create an admin login: `cd /var/www/shadertree && venv/bin/python manage.py createsuperuser`.
+3. Without the LED boards attached, set `SHADERTREE_NO_USB=1` in `local.env` and `sudo systemctl restart shadertree-runner`.
+
+### After a SteamOS update
+
+Run `./install.sh` again. SteamOS updates remove the build tools, can remove the udev rule, services and settings the script puts in `/etc`, and can replace the system Python. The script puts all of that back and rebuilds the venv if needed. Your database, settings and backups are kept.
+
+### Deploying changes
+
+`git pull`, then `./deploy.sh`. It builds `runshader`, syncs `stweb/` to `/var/www/shadertree/` (deleting files that are no longer in the repo), backs up the database, installs requirements, migrates, collects static files and restarts the site and the runner.
+
+On a network that needs a proxy, set `https_proxy`/`http_proxy` before running either script. pacman, pip and podman use them. When a proxy is set in your shell profile but you're on a network without it, unset it for one run: `env -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY ./deploy.sh`.
+
+### Logs and status
+
+```
+systemctl status gunicorn shadertree-runner shadertree-backup.timer
+systemctl --user status shadertree-nginx
+journalctl -u shadertree-runner -f
 ```
 
 ### Backups
 
-`/var/www/shadertree/backups/` holds hourly copies of the database, plus one from every deploy. The newest 168 are kept (about 2 MB each). Copy them off the Deck now and then.
+`~/shadertree-backups/` holds hourly copies of the database, plus one from every deploy. The newest 168 are kept (about 2 MB each). Copy them off the Deck now and then.
 
-The Deck's `/var` partition is only 230 MB, so make `backups` a link into `/home` before enabling the timer:
-```
-mkdir -p ~/shadertree-backups
-ln -s ~/shadertree-backups /var/www/shadertree/backups
-```
-
-To restore one: `sudo systemctl stop gunicorn shadertree-runner`, copy the backup over `db.sqlite3`, delete `db.sqlite3-wal` and `db.sqlite3-shm`, then start both services again.
+To restore one: `sudo systemctl stop gunicorn shadertree-runner`, copy the backup over `/var/www/shadertree/db.sqlite3`, delete `db.sqlite3-wal` and `db.sqlite3-shm`, then start both services again.
 
 To seed a fresh database with the shader prefix, default editor text and LED coordinates, export them from the live one:
 ```

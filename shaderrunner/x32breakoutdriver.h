@@ -135,7 +135,7 @@ void DeviceArrive( struct libusb_device *dev )
 	int err = libusb_open(dev, &thandle);
 	if( err )
 	{
-		fprintf( stderr, "Error opening device.  Did you forget to `make install_udev_rules`?\n" );
+		fprintf( stderr, "Error opening device.  Did you run ./install.sh?\n" );
 		return;
 	}
 

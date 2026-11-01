@@ -1,0 +1,16 @@
+[Unit]
+Description=Shadertree nginx (proxy to gunicorn, static files)
+
+[Container]
+Image=docker.io/library/nginx:stable-alpine
+Network=host
+Volume=%h/.config/shadertree/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+Volume=/var/www/shadertree/static:/var/www/shadertree/static:ro
+
+[Service]
+Restart=always
+# The first start downloads the image
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

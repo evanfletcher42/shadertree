@@ -4,9 +4,10 @@ After=network.target
 
 [Service]
 User=deck
-Group=www-data
 WorkingDirectory=/var/www/shadertree
-ExecStart=/var/www/shadertree/venv/bin/gunicorn --access-logfile - --workers 3 --bind unix:/var/www/shadertree/shadertree.sock shadertree.wsgi:application
+EnvironmentFile=-/var/www/shadertree/local.env
+# Localhost only. A client that reached gunicorn directly could set its own X-Real-IP.
+ExecStart=/var/www/shadertree/venv/bin/gunicorn --access-logfile - --workers 3 --bind 127.0.0.1:8000 shadertree.wsgi:application
 Restart=always
 
 [Install]

@@ -1,4 +1,4 @@
-# Makefile for compiling shader_runner on Arch Linux (Steam Deck)
+# Builds runshader. On a Steam Deck, install.sh installs the compiler and headers this needs.
 
 CXX = g++
 CXXFLAGS = -Wall -O2 -std=c++17 -g
@@ -19,7 +19,7 @@ HDRS = shaderrunner/x32breakoutdriver.h shaderrunner/os_generic.h
 TARGET = shaderrunner/runshader
 COPY_DIR = stweb/runshader
 
-.PHONY: all copy install_udev_rules clean
+.PHONY: all copy clean
 
 all: $(TARGET) copy
 
@@ -29,10 +29,5 @@ $(TARGET): $(SRCS) $(HDRS)
 copy: $(TARGET)
 	cp $(TARGET) $(COPY_DIR)
 
-install_udev_rules : 
-	sudo cp shaderrunner/99-x32-ws2812-usbhs-breakout.rules /etc/udev/rules.d/
-	sudo udevadm control --reload
-	sudo udevadm trigger
-	
 clean:
 	rm -f $(TARGET)

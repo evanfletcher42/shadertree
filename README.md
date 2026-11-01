@@ -28,7 +28,7 @@ Then:
 
 ### After a SteamOS update
 
-Run `./install.sh` again. SteamOS updates remove the build tools, can remove the udev rule, services and settings the script puts in `/etc`, and can replace the system Python. The script puts all of that back and rebuilds the venv if needed. Your database, settings and backups are kept.
+Run `./install.sh` again. SteamOS updates remove the build tools, can remove the udev rule, services, firewall rule and settings the script puts in `/etc`, and can replace the system Python. The script puts all of that back and rebuilds the venv if needed. Your database, settings and backups are kept.
 
 ### Deploying changes
 

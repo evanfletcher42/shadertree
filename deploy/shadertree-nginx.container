@@ -9,8 +9,6 @@ Volume=/var/www/shadertree/static:/var/www/shadertree/static:ro
 
 [Service]
 Restart=always
-# The first start downloads the image
-TimeoutStartSec=900
 
 [Install]
 WantedBy=default.target

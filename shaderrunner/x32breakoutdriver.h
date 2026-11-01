@@ -20,9 +20,6 @@
 // Define serials
 // const char * serials[DEVICES] = { "f38dabcd5b6ebc14", "d3f9abcd3bdabc14" };
 
-// You must provide this.
-static inline void UpdateLEDs();
-
 // Call these.
 int SetupBreakoutDriver();
 void TickBreakoutDriver();
@@ -37,7 +34,6 @@ static struct libusb_transfer * transfers[DEVICES][TRANSFERS];
 static int xfertotal = 0;
 static int done_frame = 0;
 static int done_mask = 0;
-static int frame_num;
 
 uint32_t LEDs[DEVICES][NR_LEDS_PER_STRAND][STRANDS];
 int configured[DEVICES];

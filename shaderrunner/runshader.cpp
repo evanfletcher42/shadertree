@@ -390,8 +390,6 @@ int main(int argc, char* argv[])
 
     float *pfColors = new float[numLEDs * 3];
 
-    bool bFirstWrite = true;
-
     while (!stop)
     {
         float currentTime = static_cast<float>(getTimeSeconds()) - startTime;

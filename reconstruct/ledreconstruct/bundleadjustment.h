@@ -97,7 +97,6 @@ public:
 
 	// Writes the LED configuration JSON compatible with the shadertree web system.
 	// Writes <basePath>.ledcoords.json: flat x,y,z per LED; 0,0,0 if not reconstructed.
-	// Writes <basePath>.leds.json: [{addr, x, y, z, interpolated}].
 	bool WriteSiteCoordinatesToJson(const std::string& basePath);
 
 	// Minimum number of covisible LEDs between the pair of frames used to initialize the BA problem.

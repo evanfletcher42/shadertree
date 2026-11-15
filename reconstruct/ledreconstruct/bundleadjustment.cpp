@@ -1255,7 +1255,6 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath)
 		flat[i] = 0.0;
 	}
 
-	Json::Value list(Json::arrayValue);
 	for (size_t i = 0; i < points.size(); i++)
 	{
 		double flX = points[i][0] * flScale;
@@ -1265,21 +1264,13 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath)
 		flat[3 * leds[i]] = flX;
 		flat[3 * leds[i] + 1] = flY;
 		flat[3 * leds[i] + 2] = flZ;
-
-		Json::Value led(Json::objectValue);
-		led["addr"] = leds[i];
-		led["x"] = flX;
-		led["y"] = flY;
-		led["z"] = flZ;
-		led["interpolated"] = m_pointsInterpolated[leds[i]];
-		list.append(led);
 	}
 
 	printf("Site coordinates: %zu LEDs, %s up (median radius below / above mid-height %.3f / %.3f), scale %.3f\n",
 		points.size(), bZUp ? "+Z" : "-Z", lowRadii.empty() ? 0.0 : Median(lowRadii), highRadii.empty() ? 0.0 : Median(highRadii),
 		flScale);
 
-	return WriteJson(basePath + ".ledcoords.json", flat) && WriteJson(basePath + ".leds.json", list);
+	return WriteJson(basePath + ".ledcoords.json", flat);
 }
 
 void BundleAdjuster::composeRT(double* pose, cv::Mat& poseRT)

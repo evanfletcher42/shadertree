@@ -21,7 +21,7 @@ int main(int argc, char** argv)
         ("decode-images", "Directory for per-video decode visualizations (<video>.decode.png; is slow)", cxxopts::value<std::string>())
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
         ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>())
-        ("site", "Also write site coordinates: <path>.ledcoords.json (paste into admin LedCoordsCfg) and <path>.leds.json", cxxopts::value<std::string>())
+        ("site", "Also write site coordinates: <path>.ledcoords.json (paste into admin LedCoordsCfg)", cxxopts::value<std::string>())
         ("threads", "Solver threads (default: one per CPU core)", cxxopts::value<int>()->default_value("0"));
 
     std::string videoDir;
@@ -111,7 +111,7 @@ int main(int argc, char** argv)
 
     if (!sitePath.empty())
     {
-        printf("Writing site coordinates to: %s.ledcoords.json, %s.leds.json\n", sitePath.c_str(), sitePath.c_str());
+        printf("Writing site coordinates to: %s.ledcoords.json\n", sitePath.c_str());
         bundleAdjuster.WriteSiteCoordinatesToJson(sitePath);
     }
 

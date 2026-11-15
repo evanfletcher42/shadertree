@@ -40,10 +40,10 @@ static constexpr int k_nMinBlobPixels = 9;
 // maps 4 input bits -> 8 output bits
 static constexpr uint8_t k_hadamardCodewords[16] =
 {
-    0b00000000, 0b01010101, 0b00110011, 0b01100110,
-    0b00001111, 0b01011010, 0b00111100, 0b01101001,
-    0b11111111, 0b10101010, 0b11001100, 0b10011001,
-    0b11110000, 0b10100101, 0b11000011, 0b10010110,
+	0b00000000, 0b01010101, 0b00110011, 0b01100110,
+	0b00001111, 0b01011010, 0b00111100, 0b01101001,
+	0b11111111, 0b10101010, 0b11001100, 0b10011001,
+	0b11110000, 0b10100101, 0b11000011, 0b10010110,
 };
 
 enum LedColor_t
@@ -306,9 +306,9 @@ static bool AccumulateCodes( cv::Mat *pCode, cv::Mat *pKnown, cv::Mat *pFirstCol
 static int DecodeNibble( uint8_t nCodeword )
 {
 	// Exact matches only.
-	// We could try to recover lost bits, but for this application, corrupted codewords usually mean there's some kind 
-	// of occlusion or other problem that makes the LED detection in image space unreliable for reconstruction. 
-	// We're probably leaving some detections on the floor, but I'm fine with that. 
+	// We could try to recover lost bits, but for this application, corrupted codewords usually mean there's some kind
+	// of occlusion or other problem that makes the LED detection in image space unreliable for reconstruction.
+	// We're probably leaving some detections on the floor, but I'm fine with that.
 	for ( int i = 0; i < 16; i++ )
 	{
 		if ( k_hadamardCodewords[i] == nCodeword )
@@ -334,7 +334,7 @@ static int DecodePixel( uint32_t nCode, uint8_t nFirstColor )
 	if ( nLedIdx >= k_nMaxLeds )
 		return k_nLabelBadIndex;
 
-	// As an additional check, confirm 
+	// As an additional check, confirm the LED's color cycle starts at idx % 3
 	if ( nLedIdx % 3 != nFirstColor )
 		return k_nLabelBadIndex;
 
@@ -342,7 +342,7 @@ static int DecodePixel( uint32_t nCode, uint8_t nFirstColor )
 }
 
 
-// Connected components - Finds 8-connected blobs of pixels with the same decoded LED index. 
+// Connected components - Finds 8-connected blobs of pixels with the same decoded LED index.
 static void FindBlobs( std::vector< PointObservation_t > *pObservations, int *pnDuplicateIdxs, cv::Mat *pLabels )
 {
 	std::vector< PointObservation_t > best( k_nMaxLeds );
@@ -405,7 +405,7 @@ static void FindBlobs( std::vector< PointObservation_t > *pObservations, int *pn
 			obs.nPixels = nPixels;
 		}
 	}
- 
+
 	*pnDuplicateIdxs = 0;
 	for ( int i = 0; i < k_nMaxLeds; i++ )
 	{

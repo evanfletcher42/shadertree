@@ -341,7 +341,7 @@ bool BundleAdjuster::TwoFrameHomography(int nFrame1, int nFrame2, cv::Mat &homog
 		printf("TwoFrameHomography: Failed to find correspondences between frames %d and %d\n", nFrame1, nFrame2);
 		return false;
 	}
-	
+
 	if (frame1Pts.size() < 4)
 	{
 		// While we could find *a* homography, it wouldn't be particularly meaningful
@@ -713,7 +713,7 @@ int BundleAdjuster::InterpolateNewPoints()
 {
 	// The tree is built out of multiple strands of LEDs, each up to k_nLedsPerStrand long.
 	// Within a strand, LEDs have consistent-ish spacing. Use this to interpolate over small gaps in the middle of a strand.
-	// Note: HW addressing is as though all LEDs are assembled, but each strand is arbitrarily cut short on the tree, so 
+	// Note: HW addressing is as though all LEDs are assembled, but each strand is arbitrarily cut short on the tree, so
 	// gaps at the end of each strand are expected.
 
 	std::vector<double> pitches;
@@ -897,7 +897,7 @@ int BundleAdjuster::CullReprojectionOutliers()
 
 	// Check whether the inlier observation set for a given LED has changed; re-triangulate if necessary.
 	// See TriangulateConsensus(...) - we might've just removed cameras that were constraining a given LED to an incorrect inlier set,
-	// or the solver might have pushed LEDs/cameras around in a way that changes the inlier set. 
+	// or the solver might have pushed LEDs/cameras around in a way that changes the inlier set.
 	int nRetriangulated = 0;
 	for (const auto& kv : FindObservingFrames(true))
 	{
@@ -1269,7 +1269,7 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	if (points.empty())
 		return false;
 
-	// Tree is a cone - guess at which side is up by comparing radii above/below midpoint hight
+	// Tree is a cone - guess at which side is up by comparing radii above/below midpoint height
 
 	std::vector<double> heights;
 	for (const std::array<double, 3>& p : points)
@@ -1290,7 +1290,7 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	if (bFlip)
 		bZUp = !bZUp;
 
-	// If flip needed: rotate 180deg about +x: (x, y, z) -> (x, -z, y) 
+	// If flip needed: rotate 180deg about +x: (x, y, z) -> (x, -z, y)
 	// Then: Z up -> Y up: (x, y, z) -> (x, z, -y).
 	double flSign = bZUp ? 1.0 : -1.0;
 	double flMinY = DBL_MAX;

@@ -75,7 +75,6 @@ bool BundleAdjuster::LoadCameraCalibrationFromJson(std::string& jsonPath)
 	for (int i = 0; i < 5; i++)
 	{
 		m_distCoefs.at<float>(i) = calJson["dist"][i].asFloat();
-		printf("Dist: %f\n", m_distCoefs.at<float>(i));
 	}
 
 	m_intrinsics[LedObservationResidual::eFx] = calJson["fx"].asDouble();

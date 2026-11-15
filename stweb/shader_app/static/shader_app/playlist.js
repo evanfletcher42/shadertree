@@ -18,7 +18,7 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// Calls onUpdate with /api/playlist now and every PLAYLIST_POLL_MS
+// Poll /api/playlist every PLAYLIST_POLL_MS and pass results to onUpdate
 function pollPlaylist(onUpdate) {
     async function tick() {
         try {

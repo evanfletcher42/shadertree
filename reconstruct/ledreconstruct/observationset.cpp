@@ -119,7 +119,7 @@ static bool LoadOrDecodeVideo( std::vector< PointObservation_t > *pObservations,
 
 	if ( !WriteObservationsJson( jsonPath, *pObservations ) )
 	{
-		printf( "Error: can't write %s\n", jsonPath.string().c_str() );
+		printf( "Failed to write observation cache: %s\n", jsonPath.string().c_str() );
 	}
 
 	return true;
@@ -190,7 +190,7 @@ bool ObservationSet::LoadFromJson( const std::string &jsonDir )
 		std::vector< PointObservation_t > observations;
 		if ( !ReadObservationsJson( &observations, path ) )
 		{
-			printf( "%s: can't read, skipped\n", path.string().c_str() );
+			printf( "LoadFromJson: Failed to read %s, skipping\n", path.string().c_str() );
 			continue;
 		}
 

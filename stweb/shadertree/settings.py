@@ -31,7 +31,7 @@ SECRET_KEY = SECRET_KEY_FILE.read_text().strip()
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-# Production adds its hostnames in a systemd drop-in, comma-separated (README)
+# Additional hostnames come from SHADERTREE_ALLOWED_HOSTS (comma-separated)
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost'] + [h for h in os.environ.get('SHADERTREE_ALLOWED_HOSTS', '').split(',') if h]
 
 
@@ -138,8 +138,8 @@ SHADER_PLAY_SECONDS = 30
 # Consecutive failed compiles on the tree before a shader is taken off it
 SHADER_MAX_COMPILE_FAILURES = 3
 
-# SHADERTREE_NO_USB=1 runs the runner without the LED boards (runshader --no-usb)
+# Set SHADERTREE_NO_USB=1 to run without the LED boards attached
 RUNSHADER_NO_USB = os.environ.get("SHADERTREE_NO_USB") == "1"
 
-# LED light output is color^LED_GAMMA (runshader.cpp WriteUsb); the editor preview reproduces it
+# LED light output ~= color^LED_GAMMA. The editor preview uses this to match the tree.
 LED_GAMMA = 1.7

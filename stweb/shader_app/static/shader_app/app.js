@@ -117,7 +117,7 @@ function highlightErrorLines(errorMessage) {
 // Shader Compilation Utilities
 // ------------------------
 
-// Shaders are flagged for deletion once attached, so deleting the program frees them
+// Note: shaders are flagged for deletion after attaching. Deleting the program frees them.
 function attachShader(program, source, type) {
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
@@ -293,7 +293,7 @@ gl.bindVertexArray(null);
 // Capture Colors with Transform Feedback
 // ------------------------
 
-// Transform feedback inputs: iPos at location 0, iIdx at location 1
+// VAO for transform feedback inputs (iPos @ location 0, iIdx @ location 1)
 const tfCaptureVAO = gl.createVertexArray();
 gl.bindVertexArray(tfCaptureVAO);
 gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);

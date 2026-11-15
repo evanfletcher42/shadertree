@@ -8,13 +8,12 @@ find_package( jsoncpp CONFIG REQUIRED )
 find_package( cxxopts 3 CONFIG REQUIRED )
 find_package( Threads REQUIRED )
 
-# OpenCV's version file rejects a different major version, so check the floor by hand.
+# Minimum OpenCV version check. Done by hand since find_package( OpenCV 4.6 ) would also reject OpenCV 5.
 if ( OpenCV_VERSION VERSION_LESS 4.6 )
 	message( FATAL_ERROR "OpenCV 4.6 or newer required (found ${OpenCV_VERSION})" )
 endif()
 
-# OpenCV 5 split calib3d into calib and geometry.
-# Our functions moved to geometry; the calib3d.hpp header stayed in calib.
+# OpenCV 5 splits calib3d into calib + geometry. The functions we use are in geometry, but calib3d.hpp is in calib.
 if ( OpenCV_VERSION_MAJOR GREATER_EQUAL 5 )
 	set( OPENCV_GEOMETRY_LIBS opencv_geometry opencv_calib )
 else()

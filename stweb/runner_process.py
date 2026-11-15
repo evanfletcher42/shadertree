@@ -22,7 +22,7 @@ from shader_app.models import LedCoordsCfg, PlaybackControl, Shader, ShaderPrefi
 BASE_DIR = Path(__file__).resolve().parent
 RUNSHADER = BASE_DIR / "runshader"
 COMPILED_LINE = "Shader compiled successfully"
-COMPILE_FAILED_CODES = (1, 3)  # runshader: vertex shader compile, program link
+COMPILE_FAILED_CODES = (1, 3)  # runshader exit codes for user shader compile/link failures
 POLL_SECONDS = 0.1
 
 _last_coords = None
@@ -37,7 +37,7 @@ def sqlite_enable_wal():
 
 
 def write_coords():
-    """Write ledcoords.dat for runshader. False if no coordinates are configured."""
+    """Write LED coordinates to ledcoords.dat for runshader. Returns False if no coordinates are configured."""
     global _last_coords
     cfg = LedCoordsCfg.objects.first()
     if cfg is None:
@@ -65,7 +65,7 @@ def take_play_now():
 
 
 def refresh(ctrl):
-    """Sync the playlist with the playable shaders and apply any play-now. True if a play-now was applied."""
+    """Sync the playlist with the playable shaders and apply any play-now. Returns True if a play-now request was applied."""
     close_old_connections()
     playable = playable_ids()
     before = (list(ctrl.queue), list(ctrl.next_cycle))
@@ -106,12 +106,12 @@ def stop_process(p):
 
 
 def run_shader(program_text, on_compiled, should_stop):
-    """Run one slot of runshader. Returns (compiled, stopped by us, return code, stderr tail)."""
+    """Run a shader in runshader for one playlist slot. Returns a tuple: (compiled, stopped_by_runner, return_code, stderr_tail)"""
     args = [str(RUNSHADER)] + (["--no-usb"] if settings.RUNSHADER_NO_USB else [])
     p = subprocess.Popen(args, cwd=BASE_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, text=True, errors="replace")
 
-    # drain both pipes so per-frame GL error spam can't block runshader
+    # Read stdout and stderr continuously. Otherwise per-frame GL error spam can fill a pipe and block runshader.
     compiled = threading.Event()
     stderr_tail = deque(maxlen=200)
 
@@ -133,7 +133,7 @@ def run_shader(program_text, on_compiled, should_stop):
         except BrokenPipeError:
             pass
 
-        # the play time starts at compile; until then this also bounds a hung compile
+        # Deadline resets once the shader compiles. Until then, it doubles as a compile timeout.
         deadline = time.monotonic() + settings.SHADER_PLAY_SECONDS
         started = False
         while p.poll() is None:
@@ -185,7 +185,7 @@ def play_one(ctrl):
         set_now_playing(shader.id)
 
     def should_stop():
-        # next_cycle holds every playable shader
+        # Stop if a play-now was applied or this shader is no longer playable
         return refresh(ctrl) or shader.id not in ctrl.next_cycle
 
     program_text = ShaderPrefix.program_prefix() + version.content

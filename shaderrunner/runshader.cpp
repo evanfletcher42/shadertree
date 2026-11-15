@@ -36,7 +36,7 @@ const char * serials[DEVICES] = { "f38dabcd5b6ebc14", "d3f9abcd3bdabc14" };
 volatile sig_atomic_t stop = 0;
 volatile sig_atomic_t stopLED = 0;
 
-// --no-usb: render as normal but don't touch USB
+// If set (--no-usb), render shaders as normal but skip all USB output
 bool g_bNoUsb = false;
 
 og_sema_t semaReadyForLEDs;
@@ -116,7 +116,7 @@ GLuint linkProgram(GLuint vertexShader, GLuint fragmentShader)
 static EGLDisplay s_eglDisplay = EGL_NO_DISPLAY;
 static EGLContext s_eglContext = EGL_NO_CONTEXT;
 
-// Surfaceless: needs no window or display server
+// Create a surfaceless GL context (no window or display server needed)
 static bool CreateGLContext()
 {
     s_eglDisplay = eglGetPlatformDisplay( EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, nullptr );
@@ -145,7 +145,6 @@ static bool CreateGLContext()
         return false;
     }
 
-    // Without a surface there is no default framebuffer, and draws fail even with rasterizer discard
     GLuint renderbuffer, framebuffer;
     glGenRenderbuffers( 1, &renderbuffer );
     glBindRenderbuffer( GL_RENDERBUFFER, renderbuffer );
@@ -237,7 +236,7 @@ void WriteUsb(float *pfColors, int numLEDs)
 {
     if ( g_bNoUsb )
     {
-        // stand in for the WS2812 frame time: 30 us per LED, plus the reset gap
+        // Simulate WS2812 output timing (30us per LED + reset gap)
         std::this_thread::sleep_for( std::chrono::microseconds( NR_LEDS_PER_STRAND * 30 + 300 ) );
         return;
     }
@@ -332,7 +331,7 @@ int main(int argc, char* argv[])
         return 3;
     }
 
-    // runner_process.py waits for this line before marking the shader as playing
+    // Note: runner_process.py looks for this exact line. Keep in sync.
     printf("Shader compiled successfully\n");
     fflush(stdout);
 
@@ -347,7 +346,6 @@ int main(int argc, char* argv[])
 
     printf("Loaded LEDs: %d\n", numLEDs);
 
-    // started after all early exits; returning with a joinable thread aborts
     std::thread thread;
     if ( !g_bNoUsb )
         thread = std::thread(USBThread);

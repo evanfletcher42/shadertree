@@ -23,7 +23,7 @@ jobs:
           if ( $LASTEXITCODE -ne 0 ) { exit 1 }
           cmake --build --preset windows-release
           if ( $LASTEXITCODE -ne 0 ) { exit 1 }
-          # Without arguments it prints usage and exits 1; anything else means it failed to load.
+          # Smoke test: with no args, ledreconstruct prints usage and returns 1. Any other exit code means it failed to load.
           build/windows/Release/ledreconstruct.exe
           if ( $LASTEXITCODE -ne 1 ) { exit 1 }
           exit 0

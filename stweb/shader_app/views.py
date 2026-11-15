@@ -14,7 +14,7 @@ def eta_text(eta):
     return time_format(timezone.localtime(eta), "g:i:s A") if eta else ""
 
 def next_plays():
-    """Shader id -> when it next plays on the tree, as display text."""
+    """Returns a dict: shader id -> display text for when it next plays on the tree."""
     texts = {}
     for shader, eta in PlaybackControl.get().upcoming():
         texts.setdefault(shader.id, eta_text(eta))
@@ -147,7 +147,7 @@ def api_edit_shader(request):
                 'message': 'Requested shader not found'
                 }, status=404)
 
-        # update() so a concurrent runner write to is_playing isn't clobbered
+        # Use update() to avoid clobbering a concurrent runner write to is_playing
         # a new version gets a fresh set of compile attempts on the tree
         Shader.objects.filter(pk=shader.pk).update(
             title=shader_title,
@@ -239,7 +239,7 @@ def api_playlist(request):
 def play_now(request, ident: str):
     shader = get_object_or_404(Shader, ident=ident, is_deleted=False, is_playable=True)
 
-    # update() only touches the request; the runner owns the playlist fields
+    # Only set the request here. The runner owns the playlist fields.
     PlaybackControl.get()
     PlaybackControl.objects.filter(pk=1).update(force_shader_id=shader.id)
 

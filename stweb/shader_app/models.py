@@ -136,13 +136,13 @@ class BannedIP(models.Model):
         return self.ip_address
 
 class PlaybackControl(models.Model):
-    # singleton row (pk=1)
+    # Singleton (always pk=1)
     force_shader = models.ForeignKey(
         "Shader", null=True, blank=True, on_delete=models.SET_NULL
     )
     updated_at = models.DateTimeField(auto_now=True)
 
-    # The rest of this cycle, then the whole next cycle, so every playable shader has a next play time.
+    # Playlist state. Covers the rest of this cycle + all of the next, s.t. every playable shader has a next play time.
     # Only the runner writes these.
     queue = models.JSONField(default=list)  # shader ids still to play this cycle, in order
     next_cycle = models.JSONField(default=list)  # every playable shader id, in next cycle's order
@@ -154,7 +154,7 @@ class PlaybackControl(models.Model):
         return PlaybackControl.objects.get_or_create(pk=1)[0]
 
     def sync(self, playable_ids):
-        """Drop shaders that stopped being playable. Slot new ones in later this cycle and into the next."""
+        """Sync the playlist with the current set of playable shaders. New shaders are inserted at random positions in this cycle and the next."""
         playable = set(playable_ids)
         self.queue = [i for i in self.queue if i in playable]
         self.next_cycle = [i for i in self.next_cycle if i in playable]
@@ -165,7 +165,7 @@ class PlaybackControl(models.Model):
         self.avoid_repeat()
 
     def take_next(self):
-        """Advance to the next shader id, starting the next cycle when this one is done. None if nothing is playable."""
+        """Advance to the next shader id, starting the next cycle when this one is done. Returns None if nothing is playable."""
         if not self.queue:
             self.queue = self.next_cycle
             self.next_cycle = random.sample(self.queue, len(self.queue))
@@ -186,8 +186,8 @@ class PlaybackControl(models.Model):
             self.next_cycle[0], self.next_cycle[1] = self.next_cycle[1], self.next_cycle[0]
 
     def upcoming(self):
-        """(shader, estimated start) pairs through the end of the next cycle, soonest first.
-        Most shaders appear twice. The estimate is None while the runner is stopped."""
+        """Returns a list of (shader, estimated start time) through the end of the next cycle, soonest first.
+        Most shaders appear twice. Start times are None while the runner is stopped."""
         ids = self.queue + self.next_cycle
         shaders = Shader.objects.in_bulk(ids)
         duration = timedelta(seconds=settings.SHADER_PLAY_SECONDS)

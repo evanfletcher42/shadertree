@@ -92,16 +92,13 @@ public:
 	// Find the transform that aligns the reconstruction along the Z axis.  
 	bool FindAlignmentTransform();
 
-	// Output a file containing all recovered LED locations and camera poses.
-	bool WriteSolutionToJson(std::string& outPath);
-
 	// Output a file containing LED locations, after alignment.
 	bool WriteAlignedReconstructionToJson(const std::string& outPath);
 
 	// Writes the LED configuration JSON compatible with the shadertree web system.
 	// Writes <basePath>.ledcoords.json: flat x,y,z per LED; 0,0,0 if not reconstructed.
 	// Writes <basePath>.leds.json: [{addr, x, y, z, interpolated}].
-	bool WriteSiteCoordinatesToJson(const std::string& basePath, bool bFlip);
+	bool WriteSiteCoordinatesToJson(const std::string& basePath);
 
 	// Minimum number of covisible LEDs between the pair of frames used to initialize the BA problem.
 	static constexpr int k_nMinInitSharedLeds = 100;

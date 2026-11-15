@@ -47,7 +47,7 @@ The site's About page has more.
 |---|---|
 | `stweb/` | Django site, and `runner_process.py`, which plays the playlist |
 | `shaderrunner/` | `runshader` (renders a shader and drives the LEDs), the USB driver, the udev rule, `ledcodes.glsl` (blink codes for reconstruction) |
-| `reconstruct/` | `ledreconstruct` (decoder and solver), plus Python tools for camera calibration and synthetic test data |
+| `reconstruct/` | `ledreconstruct` (decoder and solver), plus Python tools for camera calibration |
 | `deploy/` | systemd units and nginx config for the Deck |
 | `install.sh`, `deploy.sh` | Deck setup and deployment |
 | `setup-dev.sh`, `setup-dev.ps1` | development setup for Linux and Windows |
@@ -131,8 +131,6 @@ python manage.py runserver --insecure
 ```
 The site is at http://127.0.0.1:8000/. `--insecure` serves the static files, which `runserver` otherwise skips because `DEBUG` is off. The editor preview works without the tree. Shaders only play if the runner is running.
 
-Tests: `python manage.py test shader_app`.
-
 ### Building runshader
 
 `make` in the repository root, on Linux with g++, the EGL/OpenGL headers (libglvnd) and libusb. It writes `shaderrunner/runshader` and copies it to `stweb/`. To try a shader without the LED boards, run it from a directory with a `ledcoords.dat` (the runner writes one): `./runshader --no-usb < shader.glsl`. The shader must include the prefix.
@@ -167,8 +165,6 @@ The executable is `build/linux/ledreconstruct`.
 
 **Other platforms:** use vcpkg for the dependencies: `cmake --preset linux -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake`.
 
-A build-only check runs on GitHub Actions for Windows, Ubuntu and Arch. Start it by hand under Actions > reconstruct > Run workflow.
-
 ### Calibrating the camera
 
 The solver needs a calibration for the capture camera (`--calibration`). Make one with the tools in `reconstruct/tools`, with `.venv` active:
@@ -184,7 +180,7 @@ Keep `calib.json` with your captures, outside the repository.
 1. On the Deck: `sudo systemctl stop shadertree-runner`, then from the repository root run `(cd /var/www/shadertree && ./runshader) < shaderrunner/ledcodes.glsl`. Every LED blinks its address.
 2. Film the tree from all around with the calibrated camera at 59.94 fps. 2025 used 156 clips.
 3. On a PC: `ledreconstruct --videos <video dir> --dump-observations <video dir>/obs --calibration calib.json --output points.json --site site`. Reruns reuse the decoded observations in `obs/`.
-4. In the admin, back up the `LedCoordsCfg` content, then paste in `site.ledcoords.json`. If the tree comes out upside down in the editor preview, rerun with `--flip`.
+4. In the admin, back up the `LedCoordsCfg` content, then paste in `site.ledcoords.json`.
 5. Stop `runshader` with Ctrl+C, then `sudo systemctl start shadertree-runner`.
 
 ## Credits

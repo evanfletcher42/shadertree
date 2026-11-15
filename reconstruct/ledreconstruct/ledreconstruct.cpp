@@ -20,10 +20,8 @@ int main(int argc, char** argv)
         ("dump-observations", "Directory for per-video observation JSONs (written, and reused when newer than the video)", cxxopts::value<std::string>())
         ("decode-images", "Directory for per-video decode visualizations (<video>.decode.png; is slow)", cxxopts::value<std::string>())
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
-        ("s,solution", "Output unaligned solution JSON path (optional)", cxxopts::value<std::string>())
         ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>())
         ("site", "Also write site coordinates: <path>.ledcoords.json (paste into admin LedCoordsCfg) and <path>.leds.json", cxxopts::value<std::string>())
-        ("flip", "Flip the automatically chosen up direction of the site coordinates")
         ("threads", "Solver threads (default: one per CPU core)", cxxopts::value<int>()->default_value("0"));
 
     std::string videoDir;
@@ -31,11 +29,9 @@ int main(int argc, char** argv)
     std::string dumpDir;
     std::string imageDir;
     std::string calPath;
-    std::string outSolutionPath;
     std::string outJsonPath;
     int nThreads = 0;
     std::string sitePath;
-    bool bFlip = false;
 
     try
     {
@@ -56,16 +52,12 @@ int main(int argc, char** argv)
         if (result.count("decode-images"))
             imageDir = result["decode-images"].as<std::string>();
 
-        if (result.count("solution"))
-            outSolutionPath = result["solution"].as<std::string>();
-
         if (result.count("output"))
             outJsonPath = result["output"].as<std::string>();
         else if (videoDir.empty())
             throw std::invalid_argument("--output is required");
 
         nThreads = result["threads"].as<int>();
-        bFlip = result.count("flip") > 0;
 
         if (result.count("site"))
             sitePath = result["site"].as<std::string>();
@@ -114,19 +106,13 @@ int main(int argc, char** argv)
 
     bundleAdjuster.FindAlignmentTransform();
 
-    if (!outSolutionPath.empty())
-    {
-        printf("Writing full solution to: %s\n", outSolutionPath.c_str());
-        bundleAdjuster.WriteSolutionToJson(outSolutionPath);
-    }
-
     printf("Writing aligned point cloud to: %s\n", outJsonPath.c_str());
     bundleAdjuster.WriteAlignedReconstructionToJson(outJsonPath);
 
     if (!sitePath.empty())
     {
         printf("Writing site coordinates to: %s.ledcoords.json, %s.leds.json\n", sitePath.c_str(), sitePath.c_str());
-        bundleAdjuster.WriteSiteCoordinatesToJson(sitePath, bFlip);
+        bundleAdjuster.WriteSiteCoordinatesToJson(sitePath);
     }
 
     fflush(stdout);

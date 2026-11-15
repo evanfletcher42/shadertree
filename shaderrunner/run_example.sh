@@ -1,3 +1,3 @@
 #!/bin/bash
 
-cat testshader.glsl | ./runshader
+cat testshader.glsl | ./runshader "$@"

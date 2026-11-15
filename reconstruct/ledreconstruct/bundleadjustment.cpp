@@ -1126,61 +1126,6 @@ bool BundleAdjuster::FindAlignmentTransform()
 	return true;
 }
 
-bool BundleAdjuster::WriteSolutionToJson(std::string& outPath)
-{
-	Json::Value outJson;
-
-	outJson["leds"] = Json::Value(Json::arrayValue);
-
-	for (int i = 0; i < k_nMaxLeds; i++)
-	{
-		Json::Value ledEntry(Json::arrayValue);
-		
-		if (m_pointsInitialized[i])
-		{
-			ledEntry.append(m_ledPoints[i][0]);
-			ledEntry.append(m_ledPoints[i][1]);
-			ledEntry.append(m_ledPoints[i][2]);
-		}
-		else
-		{
-			ledEntry.append(NAN);
-			ledEntry.append(NAN);
-			ledEntry.append(NAN);
-		}
-
-		outJson["leds"].append(ledEntry);
-	}
-	
-	outJson["poses"] = Json::Value();
-	for (const auto& kv : m_cameraFromWorldPoses)
-	{
-		const int nFrameIdx = kv.first;
-		const std::array<double, 6> &cameraFromWorld = kv.second;
-
-		Json::Value cameraEntry(Json::arrayValue);
-		for (int i = 0; i < 6; i++)
-		{
-			cameraEntry.append(cameraFromWorld[i]);
-		}
-		outJson["poses"][nFrameIdx] = cameraEntry;
-	}
-
-	Json::StreamWriterBuilder builder;
-	builder["commentStyle"] = "None";
-	builder["indentation"] = "  ";
-
-	std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-	std::ofstream ofs(outPath);
-
-	if (!ofs)
-		return false;
-
-	writer->write(outJson, &ofs);
-
-	return true;
-}
-
 bool BundleAdjuster::WriteAlignedReconstructionToJson(const std::string& outPath)
 {
 	Json::Value outJson;
@@ -1251,7 +1196,7 @@ static bool WriteJson(const std::string& path, const Json::Value& value)
 	return true;
 }
 
-bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, bool bFlip)
+bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath)
 {
 	std::vector<int> leds;
 	std::vector<std::array<double, 3>> points;
@@ -1287,8 +1232,6 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	}
 
 	bool bZUp = lowRadii.empty() || highRadii.empty() || Median(lowRadii) > Median(highRadii);
-	if (bFlip)
-		bZUp = !bZUp;
 
 	// If flip needed: rotate 180deg about +x: (x, y, z) -> (x, -z, y)
 	// Then: Z up -> Y up: (x, y, z) -> (x, z, -y).
@@ -1332,9 +1275,9 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 		list.append(led);
 	}
 
-	printf("Site coordinates: %zu LEDs, %s up (median radius below / above mid-height %.3f / %.3f%s), scale %.3f\n",
+	printf("Site coordinates: %zu LEDs, %s up (median radius below / above mid-height %.3f / %.3f), scale %.3f\n",
 		points.size(), bZUp ? "+Z" : "-Z", lowRadii.empty() ? 0.0 : Median(lowRadii), highRadii.empty() ? 0.0 : Median(highRadii),
-		bFlip ? ", flipped by --flip" : "", flScale);
+		flScale);
 
 	return WriteJson(basePath + ".ledcoords.json", flat) && WriteJson(basePath + ".leds.json", list);
 }

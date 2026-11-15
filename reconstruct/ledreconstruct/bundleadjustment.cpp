@@ -31,7 +31,7 @@ BundleAdjuster::BundleAdjuster(std::vector<std::vector<PointObservation_t>>* pOb
 	// Initial alignment transform -> identity
 	memset(m_alignedFromWorld, 0, sizeof(m_alignedFromWorld));
 
-	// Origin frame ID is unknownd
+	// Origin frame ID is unknown
 	m_nOriginFrameId = -1;
 
 	// Initialize camera calibration to something that would never work.
@@ -94,8 +94,7 @@ bool BundleAdjuster::LoadCameraCalibrationFromJson(std::string& jsonPath)
 
 bool BundleAdjuster::InitializeBA()
 {
-	// Pairs that share the most LEDs go first.
-	// Frame 1 (the origin) is the one with more LEDs.
+	// Count co-visible LEDs between all pairs of frames
 	StageClock_t::time_point pairSearchStart = StageClock_t::now();
 	int nFrames = (int)m_pObservations->size();
 	std::vector< std::array<int, 3> > pairs;  // shared LEDs, frame 1, frame 2
@@ -110,12 +109,17 @@ bool BundleAdjuster::InitializeBA()
 			if ((int)obs1.size() < k_nMinInitSharedLeds)
 				continue;
 
+			// Order each pair s.t. the one with the most (independent) LED observations is first
 			bool bFirstHasMore = (*m_pObservations)[i].size() >= (*m_pObservations)[j].size();
 			pairs.push_back({ (int)obs1.size(), bFirstHasMore ? i : j, bFirstHasMore ? j : i });
 		}
 	}
+
+	// Sort pairs by number of LEDs
 	std::sort(pairs.begin(), pairs.end(), std::greater< std::array<int, 3> >());
 
+	// Find the first pair with co-visible LEDs that are not adequately explained by a homography
+	// (AKA, this pair actually contains perspective differences)
 	printf("Looking for perspective differences...\n");
 	int nFrame1 = -1;
 	int nFrame2 = -1;
@@ -132,12 +136,12 @@ bool BundleAdjuster::InitializeBA()
 
 	if (nFrame1 < 0)
 	{
-		printf("InitializeBA: No pair of frames shares %d LEDs with enough parallax\n", k_nMinInitSharedLeds);
+		printf("InitializeBA: Failed: All frame pairs contain fewer than %d LEDs with adequate parallax\n", k_nMinInitSharedLeds);
 		return false;
 	}
 
 	m_stageTimes.Add("init pair search", SecondsSince(pairSearchStart));
-	printf("Init with frames %d and %d\n", nFrame1, nFrame2);
+	printf("Init with frames: %d, %d\n", nFrame1, nFrame2);
 
 	// Do a DSO-style two frame init (where frame 1 points are unprojected to Z=1)
 	if (!TwoFramePlanarInit(nFrame1, nFrame2))
@@ -171,6 +175,8 @@ bool BundleAdjuster::Reconstruct()
 		printf("\nReconstruct: Iteration %d\n", nIterations);
 		nIterations++;
 
+		// ---------- Init new viewpoints ----------
+
 		printf("\nReconstruct: Initializing new viewpoints...\n");
 		m_visualizer.SetTitle("Initializing new viewpoints...");
 		int nCamerasAdded = InitializeNewCameras();
@@ -184,13 +190,20 @@ bool BundleAdjuster::Reconstruct()
 			break;
 		}
 
-		printf("Solving poses for new viewpoints...\n");
-		m_visualizer.SetTitle("Solving new viewpoint poses...");
+		// ---------- Solver pass 1: poses only ----------
+		// Newly initialized cameras (PnP) were not solved under the same losses as the rest of this problem
+
+		printf("Solving poses with new viewpoints...\n");
+		m_visualizer.SetTitle("Solving poses (new viewpoints)...");
 		ceres::Problem problem1;
 		SetupBundleAdjustmentProblem(problem1, false, true, false);
 		SolveProblem(problem1);
 
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
+
+		// ---------- Solver pass 2: Joint poses + points ----------
+		// New viewpoints contain more observations of LEDs already in the problem
+		// Use this to refine all current LEDs and viewpoints
 
 		printf("Solving poses + points for new viewpoints...\n");
 		m_visualizer.SetTitle("Solving points and poses (new viewpoints)...");
@@ -199,9 +212,17 @@ bool BundleAdjuster::Reconstruct()
 		SetupBundleAdjustmentProblem(problem2, false, true, true);
 		SolveProblem(problem2);
 
+		// ---------- Cull outliers ----------
+		// Remove any cameras and/or LEDs that appear inconsistent with the rest of the problem.
+		// Commonly caused by:
+		//	- reflections off nearby glass or specular surfaces
+		//	- biased LED blobs from partial occlusion, or light cast on nearby surfaces
 		CullReprojectionOutliers();
 
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
+
+		// ---------- Initialize new points ----------
+		// New viewpoints --> more LEDs are covisible from more viewpoints and can be added to the solve
 
 		printf("Triangulating new points...\n");
 		m_visualizer.SetTitle("Triangulating new points...\n");
@@ -215,22 +236,24 @@ bool BundleAdjuster::Reconstruct()
 
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
 
-		// Skip 2nd BA solve if we didn't add new points
+		// Skip next BA solve if we didn't add new points
 		if (nPointsAdded <= 0)
 			continue;
 
+		// ---------- Solver pass 3: Joint (poses, points) ----------
+		// Minimize everything now that we've got new LEDs in the problem
+
 		printf("Solving poses + points for new points...\n");
 		m_visualizer.SetTitle("Solving points and poses (new points)...");
-		// Refine intrinsics here too, once each round's new points are in.
 		ceres::Problem problem3;
 		SetupBundleAdjustmentProblem(problem3, true, true, true);
 		SolveProblem(problem3);
 
+		// Cull outliers again (new points might be junk)
 		CullReprojectionOutliers();
 
 		m_visualizer.OnDataUpdate(m_cameraFromWorldPoses, (double*)m_ledPoints, m_pointsInitialized);
 	}
-
 
 	printf("\nReconstruct: Solving final BA...\n");
 	m_visualizer.SetTitle("Solving final BA...");
@@ -241,7 +264,7 @@ bool BundleAdjuster::Reconstruct()
 
 	CullReprojectionOutliers();
 
-	// With final BA, try one last round of triangulation.  
+	// Attempt one final round of triangulation & outlier removal with final BA
 	int nPointsAdded = TriangulateNewPoints();
 	printf("Reconstruct: Triangulated %d points\n", nPointsAdded);
 
@@ -255,7 +278,7 @@ bool BundleAdjuster::Reconstruct()
 	SetupBundleAdjustmentProblem(problem4, true, true, true);
 	SolveProblem(problem4);
 
-	// After all solves, since BA can't move unobserved LEDs.
+	// Use assumptions about LED string geometry to try to fill in any points we might have missed
 	InterpolateNewPoints();
 
 	printf("Reconstruct complete\n");
@@ -318,8 +341,7 @@ bool BundleAdjuster::TwoFrameHomography(int nFrame1, int nFrame2, cv::Mat &homog
 		printf("TwoFrameHomography: Failed to find correspondences between frames %d and %d\n", nFrame1, nFrame2);
 		return false;
 	}
-		
-
+	
 	if (frame1Pts.size() < 4)
 	{
 		// While we could find *a* homography, it wouldn't be particularly meaningful
@@ -400,9 +422,7 @@ bool BundleAdjuster::TwoFramePlanarInit(int nFrame1, int nFrame2)
 		return false;
 	}
 		
-
 	printf("Init with: frame%d %zu frame%d %zu\n", nFrame1, frame1Obs.size(), nFrame2, frame2Obs.size());
-
 
 	// Unproject frame 1's points to 1 meter in front of the camera.
 	std::vector< cv::Point2f > frame1PtsXY;
@@ -622,13 +642,16 @@ int BundleAdjuster::TriangulateConsensus(int nLedIdx, const std::vector<int>& fr
 	std::vector<cv::Point2f> undistorted;
 	cv::undistortPoints(points, undistorted, m_cameraMat, m_distCoefs);
 
+	// Try one big DLT triangulation (least squares best point over all observations)
 	std::vector<int> all(frames.size());
 	std::iota(all.begin(), all.end(), 0);
 	std::vector<int> best = TriangulateSubset(nLedIdx, frames, projections, undistorted, all);
+
+	// If that has more than 50% inliers, we're done
 	if (best.size() * 2 > frames.size())
 		return (int)best.size();
 
-	// A few consistent bad observations can outvote the rest, e.g. a reflection seen from adjacent views.
+	// Otherwise, we need to find the largest subset (plurality vote)
 	for (int i = 0; i < (int)frames.size(); i++)
 	{
 		for (int j = i + 1; j < (int)frames.size(); j++)
@@ -652,6 +675,8 @@ std::vector<int> BundleAdjuster::TriangulateSubset(int nLedIdx, const std::vecto
 {
 	std::vector<int> inliers;
 
+	// Solve w/ only the specified subset of observations
+
 	cv::Mat A((int)subset.size() * 2, 4, CV_64F);
 	for (int i = 0; i < (int)subset.size(); i++)
 	{
@@ -672,6 +697,7 @@ std::vector<int> BundleAdjuster::TriangulateSubset(int nLedIdx, const std::vecto
 	m_ledPoints[nLedIdx][1] = pInWorldHomogenous.at<double>(1) / flW;
 	m_ledPoints[nLedIdx][2] = pInWorldHomogenous.at<double>(2) / flW;
 
+	// Count inliers over the full observation set
 	for (int i = 0; i < (int)frames.size(); i++)
 	{
 		if (ComputeReprojectionError(m_cameraFromWorldPoses.at(frames[i]), *FindObservation(frames[i], nLedIdx)) <= k_flMaxReprojectionErrorPx)
@@ -685,9 +711,11 @@ std::vector<int> BundleAdjuster::TriangulateSubset(int nLedIdx, const std::vecto
 
 int BundleAdjuster::InterpolateNewPoints()
 {
-	// Strings are nearly straight between neighbors.
-	// Across a gap of 3, 90% of LEDs land within 0.9 LED spacings.
-	// Never fill across strands or past a strand's last solved LED.
+	// The tree is built out of multiple strands of LEDs, each up to k_nLedsPerStrand long.
+	// Within a strand, LEDs have consistent-ish spacing. Use this to interpolate over small gaps in the middle of a strand.
+	// Note: HW addressing is as though all LEDs are assembled, but each strand is arbitrarily cut short on the tree, so 
+	// gaps at the end of each strand are expected.
+
 	std::vector<double> pitches;
 	for (int i = 0; i + 1 < k_nMaxLeds; i++)
 	{
@@ -722,11 +750,12 @@ int BundleAdjuster::InterpolateNewPoints()
 			continue;
 		}
 
-		// Ends farther apart than the string between them means one is misplaced.
+		// Sanity check distance between end points of a strand
 		cv::Vec3d first(m_ledPoints[nFirst]);
 		cv::Vec3d last(m_ledPoints[i]);
 		if (cv::norm(last - first) > k_flMaxInterpChordRatio * (nGap + 1) * flPitch)
 		{
+			// First or last points in this strand might be wrong
 			nRejected++;
 			continue;
 		}
@@ -743,7 +772,7 @@ int BundleAdjuster::InterpolateNewPoints()
 		}
 	}
 
-	printf("InterpolateNewPoints: %d LEDs interpolated (gaps <= %d, pitch %.4f); %d gaps too long, %d rejected by spacing\n",
+	printf("InterpolateNewPoints: %d LEDs interpolated (gaps <= %d, pitch %.4f); %d gaps too long; %d strands rejected\n",
 		nAdded, k_nMaxInterpGap, flPitch, nTooLong, nRejected);
 	return nAdded;
 }
@@ -866,7 +895,9 @@ int BundleAdjuster::CullReprojectionOutliers()
 		nCamerasRemoved++;
 	}
 
-	// Otherwise an LED placed from a few bad views would lose all its good observations.
+	// Check whether the inlier observation set for a given LED has changed; re-triangulate if necessary.
+	// See TriangulateConsensus(...) - we might've just removed cameras that were constraining a given LED to an incorrect inlier set,
+	// or the solver might have pushed LEDs/cameras around in a way that changes the inlier set. 
 	int nRetriangulated = 0;
 	for (const auto& kv : FindObservingFrames(true))
 	{
@@ -896,6 +927,7 @@ int BundleAdjuster::CullReprojectionOutliers()
 		nRetriangulated++;
 	}
 
+	// Remove any observations that look like nonsense
 	int nObservationsRemoved = 0;
 	for (const auto& kv : m_cameraFromWorldPoses)
 	{
@@ -911,6 +943,7 @@ int BundleAdjuster::CullReprojectionOutliers()
 		nObservationsRemoved += (int)(nBefore - observations.size());
 	}
 
+	// Check for unsupported LEDs / remove them from the problem if they are no longer observed by anything
 	std::vector<int> observationCounts(k_nMaxLeds, 0);
 	for (const auto& kv : m_cameraFromWorldPoses)
 	{
@@ -987,7 +1020,7 @@ bool BundleAdjuster::SetupBundleAdjustmentProblem(ceres::Problem& problem, bool 
 		return false;
 	}
 
-	// The camera at the origin defines the coordinate system, and is always locked
+	// Origin frame pose is fixed
 	problem.SetParameterBlockConstant(m_cameraFromWorldPoses[m_nOriginFrameId].data());
 
 	if (!bSolveIntrinsics)
@@ -1012,7 +1045,7 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	options.num_threads = std::clamp(problem.NumResidualBlocks() / k_nMinimumResidualsPerThread, 1, nMachineThreads);
 
-	// ~150 cameras keep the reduced camera matrix small (~1000^2), so factor it densely.
+	// Problem is smallish (~150 viewpoints) and is fine with dense factorization
 	options.linear_solver_type = ceres::LinearSolverType::DENSE_SCHUR;
 	options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
 	options.use_nonmonotonic_steps = true;
@@ -1020,9 +1053,6 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 	options.max_num_iterations = 200;
 
 	options.minimizer_progress_to_stdout = true;
-
-	// No explicit linear_solver_ordering.
-	// Ceres orders user groups by block address, which isn't reproducible.
 
 	// TBD: Convergence tuning...
 
@@ -1036,7 +1066,7 @@ bool BundleAdjuster::SolveProblem(ceres::Problem& problem)
 
 	printf("%s\n", summary.BriefReport().c_str());
 
-	// Reprojection RMS without the robust loss, for comparing runs
+	// Log RMS reprojection without the loss function (for comparing runs)
 	ceres::Problem::EvaluateOptions evalOptions;
 	evalOptions.apply_loss_function = false;
 	double flCost = 0.0;
@@ -1092,9 +1122,6 @@ bool BundleAdjuster::FindAlignmentTransform()
 
 	if (!summary.IsSolutionUsable())
 		return false;
-
-	// TBD: Tree might be upside down.
-	//		Figure out which end of the tree is pointing up.
 
 	return true;
 }
@@ -1242,8 +1269,8 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	if (points.empty())
 		return false;
 
-	// The alignment puts the tree's axis on Z.
-	// It's a cone, so the wide half has the larger median radius.
+	// Tree is a cone - guess at which side is up by comparing radii above/below midpoint hight
+
 	std::vector<double> heights;
 	for (const std::array<double, 3>& p : points)
 	{
@@ -1263,8 +1290,8 @@ bool BundleAdjuster::WriteSiteCoordinatesToJson(const std::string& basePath, boo
 	if (bFlip)
 		bZUp = !bZUp;
 
-	// Z up -> Y up: (x, y, z) -> (x, z, -y).
-	// Upside down first rotates 180 degrees about X: (x, -z, y).
+	// If flip needed: rotate 180deg about +x: (x, y, z) -> (x, -z, y) 
+	// Then: Z up -> Y up: (x, y, z) -> (x, z, -y).
 	double flSign = bZUp ? 1.0 : -1.0;
 	double flMinY = DBL_MAX;
 	double flMaxY = -DBL_MAX;

@@ -12,7 +12,6 @@ inline double SecondsSince( StageClock_t::time_point start )
 	return std::chrono::duration< double >( StageClock_t::now() - start ).count();
 }
 
-// Wall time per named stage, summed over calls.
 class CStageTimes
 {
 public:

@@ -19,13 +19,13 @@ public:
 
 	~BundleAdjuster();
 
-	// Load a camera calibration from a JSON file.
+	// Load a camera calibration from a JSON file
 	bool LoadCameraCalibrationFromJson(std::string& jsonPath);
 
-	// Initialize from the frame pair with parallax that shares the most LEDs.
+	// Initialize the bundle adjustment problem.
 	bool InitializeBA();
 
-	// Attempt to reconstruct everything.  Runs the entire process.
+	// Attempt to reconstruct everything. Runs the entire process.
 	bool Reconstruct();
 
 	// Find correspondences between the two specified frames.
@@ -33,11 +33,10 @@ public:
 		std::vector< const PointObservation_t* >& frame1Obs, std::vector<cv::Point2f>& frame1Points,
 		std::vector< const PointObservation_t* >& frame2Obs, std::vector<cv::Point2f>& frame2Points);
 
-	// Attempt to find a homography that explains image point correspondences between two frames.
+	// Attempt to find a homography that explains image point correspondences between two frames
 	bool TwoFrameHomography( int nFrame1, int nFrame2, cv::Mat& homography );
 
-	// Do a DSO-style initialization, where points are unprojected from frame 1, and the initial frame 1 -> frame 2 
-	// transform guess is identity. An immediate bundle adjustment over these 2 frames makes init proper. 
+	// DSO-style initialization. Unprojects points from frame 1, then solves a 2-frame BA problem.
 	bool TwoFramePlanarInit(int nFrame1, int nFrame2);
 	
 	// Initialize the specified camera's cameraFromWorld transform via a PnP solve on the current map.
@@ -47,25 +46,28 @@ public:
 	// Returns the number of new cameras initialized.  
 	int InitializeNewCameras();
 
-	// Triangulate uninitialized LEDs seen by 2+ posed frames.
+	// Attempt to triangulate points that are visible in 2+ frames with known poses.
 	int TriangulateNewPoints();
 
-	// Posed frames observing each LED whose m_pointsInitialized is bInitialized.
+	// Construct a map with:
+	// - key: all LEDs in the problem with a specified initialization state (param bInitialized)
+	// - value: all frame indices currently in the problem (aka has a pose) that observe this LED
 	std::unordered_map< int, std::vector< int > > FindObservingFrames( bool bInitialized ) const;
 
-	// Triangulate an LED into m_ledPoints. Returns how many observations agree.
-	// Tries a DLT over all observations first.
-	// If no more than half agree, uses the observations that agree with the best 2-frame DLT.
+	// Triangulate a LED based on observations from specified frames. 
+	// Returns the number of inlier observations.
 	int TriangulateConsensus( int nLedIdx, const std::vector< int > &frames );
 
-	// DLT over a subset of observations. Returns every observation that agrees with it.
+	// Performs DLT triangulation over a specified subset of frame indices (param subset).
+	// Compares this result against all specified frame indices (param frames) and returns which agree with the solution. 
 	std::vector< int > TriangulateSubset( int nLedIdx, const std::vector< int > &frames, const std::vector< cv::Mat > &projections,
 		const std::vector< cv::Point2f > &undistorted, const std::vector< int > &subset );
 
-	// Fill short in-strand gaps by linear interpolation between solved LEDs.
+	// Initialize points by linearally interpolationg positions between other points.
+	// Works okay for LED strands with consistent spacing. 
 	int InterpolateNewPoints();
 
-	// A frame's observation of an LED, or nullptr.
+	// Returns a specified frame's observation of a specified LED, or nullptr. 
 	const PointObservation_t* FindObservation(int nFrameIdx, int nLedIdx) const;
 
 	// Test whether an LED is in front of all cameras that observe it.
@@ -75,15 +77,11 @@ public:
 	// Mark as unknown points that are in invalid locations (e.g. behind a camera).
 	int CullInvalidPoints();
 
-	// Reprojection error of one observation in pixels; infinite if the point is behind the camera.
+	// Reprojection error of a given observation in pixels.
+	// Returns infinity if the observation is behind the specified camera. 
 	double ComputeReprojectionError(const std::array<double, 6>& cameraFromWorld, const PointObservation_t& obs) const;
 
-	// In order, using k_flMaxReprojectionErrorPx:
-	// - drop cameras whose median error is above it, for good
-	// - re-triangulate LEDs where most observations are above it
-	// - drop observations above it
-	// - drop LEDs left with fewer than 2 observations
-	// Returns the number of LEDs culled.
+	// Scan through the problem and remove or re-initialize LEDs and/or cameras with outlier residuals. 
 	int CullReprojectionOutliers();
 
 	// Set up a bundle adjustment problem over the entire map, as specified.
@@ -100,43 +98,40 @@ public:
 	// Output a file containing LED locations, after alignment.
 	bool WriteAlignedReconstructionToJson(const std::string& outPath);
 
-	// LedCoordsCfg coordinates: Y up, y in [-1, 1], tree axis at x = z = 0.
-	// Wide end down unless bFlip.
-	// Writes <basePath>.ledcoords.json: flat x,y,z per address, 0,0,0 if unmapped.
+	// Writes the LED configuration JSON compatible with the shadertree web system. 
+	// Writes <basePath>.ledcoords.json: flat x,y,z per LED; 0,0,0 if not reconstructed. 
 	// Writes <basePath>.leds.json: [{addr, x, y, z, interpolated}].
 	bool WriteSiteCoordinatesToJson(const std::string& basePath, bool bFlip);
 
-	// The init pair must share at least this many LEDs.
+	// Minimum number of covisible LEDs between the pair of frames used to initialize the BA problem. 
 	static constexpr int k_nMinInitSharedLeds = 100;
 
 	// Minimum number of map point observations required to initialize the pose of a new camera.
 	// Should be >= 4.  
 	static constexpr int k_nMinObservationsForPnPInit = 6;
 
-	// A new camera's PnP solve must have at least this fraction of inliers.
+	// Minimum inlier fraction when initializing new camera viewpoints via PnP. 
 	static constexpr double k_flMinPnPInlierFrac = 0.8;
 
-	// Longest gap interpolation fills.
+	// LED interpolation config
 	static constexpr int k_nMaxInterpGap = 3;
-	// Max end-to-end distance across a gap, in units of (gap + 1) LED pitches.
 	static constexpr double k_flMaxInterpChordRatio = 1.1;
 
-	// Reprojection error above which an observation (or a camera's median) is an outlier.
+	// Reprojection error threshold for outliers, in pixels
 	static constexpr double k_flMaxReprojectionErrorPx = 10.0;
 
-	// Sorted by LED index within each frame.
-	// Outlier observations are erased from these.
+	// Vector (per frame) of vectors (per led observed) of LED observations
 	std::vector< std::vector< PointObservation_t > >* m_pObservations;
 
-	// Cameras culled for a bad pose; never re-added.
+	// Frames marked as outliers during the solve
 	std::unordered_set< int > m_rejectedFrames;
 
-	// Map of camera poses, indexed by frame id.
-	// Each pose describes the change of basis from world coordinates to camera coodrinates.
+	// Camera poses, indexed by frame id
+	// Convention: pInCamera = cameraFromWorld @ pInWorld
 	std::unordered_map< int, std::array<double, 6> > m_cameraFromWorldPoses;
 
-	// Ceres threads; 0 = one per core.
-	// More than one isn't bit-reproducible.
+	// Number of ceres-solver threads. 0 = one per physical CPU core
+	// Note: multi-threaded ceres-solver is nondeterministic
 	int m_nThreads = 0;
 
 	// LED points in 3D space ("the map")
@@ -145,8 +140,7 @@ public:
 	// Marks whether a given LED has been initialized.
 	bool m_pointsInitialized[k_nMaxLeds];
 
-	// Interpolated, not solved.
-	// Never in a solve or --output.
+	// Marks whether a given LED has been interpolated. 
 	bool m_pointsInterpolated[k_nMaxLeds];
 
 private:
@@ -169,6 +163,7 @@ private:
 	// Visualizations
 	CPointsVisualizer m_visualizer;
 
+	// Perf timing
 	CStageTimes m_stageTimes;
 };
 

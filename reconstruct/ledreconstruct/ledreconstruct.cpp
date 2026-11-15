@@ -18,13 +18,13 @@ int main(int argc, char** argv)
         ("videos", "Directory of videos to decode", cxxopts::value<std::string>())
         ("observations", "Directory of observation JSONs to solve from (instead of --videos)", cxxopts::value<std::string>())
         ("dump-observations", "Directory for per-video observation JSONs (written, and reused when newer than the video)", cxxopts::value<std::string>())
-        ("decode-images", "Directory for per-video decode visualizations (<video>.decode.png; slows decoding)", cxxopts::value<std::string>())
+        ("decode-images", "Directory for per-video decode visualizations (<video>.decode.png; is slow)", cxxopts::value<std::string>())
         ("c,calibration", "Path to camera calibration JSON file", cxxopts::value<std::string>())
         ("s,solution", "Output unaligned solution JSON path (optional)", cxxopts::value<std::string>())
         ("o,output", "Output aligned points JSON path (omit with --videos to only decode)", cxxopts::value<std::string>())
         ("site", "Also write site coordinates: <path>.ledcoords.json (paste into admin LedCoordsCfg) and <path>.leds.json", cxxopts::value<std::string>())
         ("flip", "Flip the automatically chosen up direction of the site coordinates")
-        ("threads", "Solver threads (default: one per core; 1 makes runs bit-reproducible)", cxxopts::value<int>()->default_value("0"));
+        ("threads", "Solver threads (default: one per CPU core)", cxxopts::value<int>()->default_value("0"));
 
     std::string videoDir;
     std::string observationsDir;
@@ -96,7 +96,6 @@ int main(int argc, char** argv)
     if (outJsonPath.empty())
         return 0;
 
-    // Big: keep it off the stack
     std::unique_ptr<BundleAdjuster> pBundleAdjuster = std::make_unique<BundleAdjuster>(&observationSet.m_observations);
     BundleAdjuster& bundleAdjuster = *pBundleAdjuster;
     bundleAdjuster.m_nThreads = nThreads;
@@ -130,7 +129,6 @@ int main(int argc, char** argv)
         bundleAdjuster.WriteSiteCoordinatesToJson(sitePath, bFlip);
     }
 
-    // Short redirected runs otherwise lose their last lines
     fflush(stdout);
     return 0;
 }

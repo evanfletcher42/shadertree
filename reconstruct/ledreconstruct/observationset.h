@@ -17,18 +17,18 @@ struct PointObservation_t
 	int nPixels = 0;
 };
 
-// Labeled LED observations, one set per view (video).
+// Labeled LED observations from all viewpoints
 class ObservationSet
 {
 public:
-	// Decode every video in a directory, one view per video.
-	// If dumpDir is set, cache each view there as <video>.json; a cache newer than its video skips decoding.
-	// If imageDir is set, write a decode image there for each video actually decoded.
+	// Decode viewpoints from videos in a specified directory.
+	// If dumpDir is not empty: Cache decoded observations there as <video>.json; re-use these if they're newer than the video
+	// If imageDir is not empty: Write a debug image for each decoded video to <video>.decode.png
 	bool LoadFromVideos( const std::string &videoDir, const std::string &dumpDir, const std::string &imageDir );
 
 	// Load observation JSONs (one view per file), as written by LoadFromVideos.
 	bool LoadFromJson( const std::string &jsonDir );
 
-	// Index like: m_observations[ nFrameIdx ][ nObservationIdxInThisFrame ], sorted by nLedIdx within each frame
+	// Addressing: m_observations[ nFrameIdx ][ nObservationIdxInThisFrame ]
 	std::vector< std::vector< PointObservation_t > > m_observations;
 };

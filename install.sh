@@ -12,12 +12,12 @@ PROD_DIR=/var/www/shadertree
 
 for tool in podman python3 rsync; do
     if ! command -v $tool >/dev/null; then
-        echo "$tool is missing. SteamOS 3.9 includes it; on other systems install it first." >&2
+        echo "$tool is missing; install it first." >&2
         exit 1
     fi
 done
 
-# Building runshader needs a compiler and headers. SteamOS ships neither, and updates remove them.
+# Set up a compiler and haders for building the `runshader` binary. 
 if ! command -v g++ >/dev/null || [ ! -e /usr/include/stdio.h ] || [ ! -e /usr/include/EGL/egl.h ] || [ ! -e /usr/include/libusb-1.0/libusb.h ]; then
     # pacman runs as root, whose environment can carry its own proxy settings. Give it exactly ours.
     SUDO_NET=(sudo env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u no_proxy -u NO_PROXY)
@@ -48,9 +48,9 @@ fi
 
 if [ ! -f "$PROD_DIR/local.env" ]; then
     cat > "$PROD_DIR/local.env" <<'ENV'
-# Hostnames and IPs the site is reached by, comma-separated. localhost always works.
+# Comma-separated hostnames and IP addresses for the site. `localhost` always works. 
 SHADERTREE_ALLOWED_HOSTS=
-# 1 runs the runner without the LED boards attached
+# If 1, the shader runner just renders / does not try to output to USB. Useful for dev. 
 SHADERTREE_NO_USB=0
 ENV
 fi

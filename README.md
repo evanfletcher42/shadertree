@@ -6,11 +6,14 @@ Shadertree is a collaborative-art holiday tree made out of thousands of 3D-scann
 
 This code is meant to run on a Steam Deck next to the tree, which is nice for kiosk UI, but anything that can run a website + has USB ports + can make a surfaceless EGL context should also work. 
 
+LEDs are driven over USB using cnlohr's [x32-ws2812-usbhs-breakout](https://github.com/cnlohr/x32-ws2812-usbhs-breakout) hardware and firmware. 
+
+
 ## How it works
 
 - **LED reconstruction** (`reconstruct/`): A C++ bundle-adjustment solver that decodes LED blinks from the tree & solves for the 3D position of every LED
 - **Web site** (`stweb/`): A Django app with the shader editor & tools for playlist management
-- **Shader Runner** (`runner_process.py`, `runshader.cpp`) - a daemon that runs submitted shaders on the GPU (EGL), pulls out vertex color attributes via transform feddback, and streams colors over USB to two WS2812 driver boards
+- **Shader Runner** (`runner_process.py`, `runshader.cpp`) - a daemon that runs submitted shaders on the GPU (EGL), pulls out vertex color attributes via transform feddback, and streams colors over USB to two WS2812 driver boards.
 
 
 ## Writing shaders
@@ -291,6 +294,7 @@ These files are included in this repository under their own licenses, not the pr
 - [Ace](https://ace.c9.io/) 1.4.12 (`ace.js`, `mode-glsl.js`, `theme-chrome.js`). Copyright (c) 2010, Ajax.org B.V. BSD 3-Clause.
 - [gl-matrix](https://glmatrix.net/) 2.7.0. Copyright (c) 2015-2018, Brandon Jones, Colin MacKenzie IV. MIT.
 - [Lobster](https://fonts.google.com/specimen/Lobster) font 1.4. Copyright (c) 2010, Pablo Impallari. SIL Open Font License 1.1.
+- [x32-ws2812-usbhs-breakout](https://github.com/cnlohr/x32-ws2812-usbhs-breakout). Copyright (c) 2025, Charles Lohr. MIT.
 
 ### Dependencies
 
@@ -301,8 +305,4 @@ Shadertree is built with these projects, not included in this repository:
 - LED reconstruction: [Ceres Solver](http://ceres-solver.org/), [OpenCV](https://opencv.org/), [Eigen](https://eigen.tuxfamily.org/), [jsoncpp](https://github.com/open-source-parsers/jsoncpp), [cxxopts](https://github.com/jarro2783/cxxopts)
 - Camera calibration tools: [OpenCV](https://opencv.org/) (Python)
 
-Please refer to these projects for their own license terms. 
-
-## License
-
-TODO
+Please refer to these projects for their license terms. 

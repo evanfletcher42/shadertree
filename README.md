@@ -1,25 +1,21 @@
 # shadertree
 
-**TODO: one-line tagline.**
+**TODO: photo or GIF of the editor preview and the tree side by side**
 
-**TODO: photo or GIF of the tree.**
+Shadertree is a collaborative-art holiday tree made out of thousands of 3D-scanned addressible LEDs. From a web browser, you can write and preview GLSL vertex shaders that write color attributes, which render out to the LEDs live! 
 
-shadertree is a holiday tree lit by thousands of individually addressable LEDs, programmed from a web browser. Anyone on the network can write a short GLSL shader in the online editor, preview it on a 3D model of the tree, and add it to the playlist. The tree plays each shader for 30 seconds, in shuffled order.
-
-Each LED's color comes from a shader evaluated at that LED's real 3D position on the tree. The positions are measured by filming the tree while every LED blinks its own address, then solving for where each one must be.
-
-**TODO: link to the live site, if public.**
+This code is meant to run on a Steam Deck next to the tree, which is nice for kiosk UI, but anything that can run a website + has USB ports + can make a surfaceless EGL context should also work. 
 
 ## How it works
 
-- **Web site** (`stweb/`): a Django app with the shader editor and its live WebGL preview, the shader library with full version history, the playlist and a "now playing" page for a kiosk screen.
-- **Shader runner**: `runner_process.py` picks the next shader from the playlist. `runshader` (`shaderrunner/`, C++) evaluates it for every LED on the GPU (EGL, transform feedback) and streams the colors over USB to two WS2812 driver boards, 32 strands × 215 LEDs each.
-- **Hardware**: a Steam Deck runs all of the above. **TODO: describe the LED strings, driver boards and power.**
-- **LED reconstruction** (`reconstruct/`): a C++ tool that decodes the blink codes from videos of the tree and solves for the 3D position of every LED with bundle adjustment (Ceres).
+- **LED reconstruction** (`reconstruct/`): A C++ bundle-adjustment solver that decodes LED blinks from the tree & solves for the 3D position of every LED
+- **Web site** (`stweb/`): A Django app with the shader editor & tools for playlist management
+- **Shader Runner** (`runner_process.py`, `runshader.cpp`) - a daemon that runs submitted shaders on the GPU (EGL), pulls out vertex color attributes via transform feddback, and streams colors over USB to two WS2812 driver boards
+
 
 ## Writing shaders
 
-Every shader starts with this prefix, which the editor shows above your code:
+Shaders are written on the site with a live Shadertoy-like editor and preview. You write a vertex shader `main()` that writes to a vertex color attribute. For example: 
 
 ```glsl
 #version 300 es
@@ -28,71 +24,126 @@ layout(location = 1) in uint iIdx;  // LED address in the string (raw hardware a
 uniform float iTime;                // seconds since the shader started
 uniform int iFrame;                 // frame counter, from 0
 out vec3 outColor;                  // output: RGB color, 0 to 1
-```
 
-Write a `main()` that sets `outColor`. For example, bands of color rising up the tree:
-
-```glsl
 void main()
 {
+    // Animate bands of color climbing up the tree
     outColor = vec3( 0.5 + 0.5 * sin( iPos.y * 6.0 - iTime * 2.0 ), 0.1, 0.3 );
 }
 ```
 
-The site's About page has more.
+## Setup / Install
 
-## Repository layout
+Shadertree's website and shader runner are built to run on a Steam Deck running SteamOS 3.9 or newer. However, almost none of it is Steam Deck specific. Many Linux systems would likely work just as well.
 
-| Path | Contents |
-|---|---|
-| `stweb/` | Django site, and `runner_process.py`, which plays the playlist |
-| `shaderrunner/` | `runshader` (renders a shader and drives the LEDs), the USB driver, the udev rule, `ledcodes.glsl` (blink codes for reconstruction) |
-| `reconstruct/` | `ledreconstruct` (decoder and solver), plus Python tools for camera calibration |
-| `deploy/` | systemd units and nginx config for the Deck |
-| `install.sh`, `deploy.sh` | Deck setup and deployment |
-| `setup-dev.sh`, `setup-dev.ps1` | development setup for Linux and Windows |
+LED reconstruction *can* be run on a Steam Deck, but it's likely better to run this on a faster PC. Reconstruction code in this repository works on Windows and should run on most Linux distributions. 
 
-## Running on a Steam Deck
+## Website Install (Steam Deck)
 
-A Steam Deck on SteamOS 3.9 or newer runs the site, the shader runner and an hourly database backup. One script installs everything.
+From desktop mode, open a terminal (Konsole) and run:
+```bash
+sudo passwd deck  # only if the deck user has no password yet
 
-What runs where:
-- `/var/www/shadertree/`: the deployed site, its venv, database, settings (`local.env`) and secret key.
-- `~/shadertree-backups/`: database backups. `/var` is only 230 MB, so they live in `/home`.
-- systemd services: `gunicorn` (the site, on 127.0.0.1:8000), `shadertree-runner` (plays the playlist) and `shadertree-backup.timer`.
-- A rootless podman container, `shadertree-nginx`, serves port 80.
-
-To build `runshader`, the script installs a compiler and headers into SteamOS with pacman, turning read-only mode off and back on. It also opens port 80 in the firewall.
-
-### Install
-
-In desktop mode, open a terminal (Konsole) and run:
-```
-sudo passwd deck            # only if the deck user has no password yet
 git clone https://github.com/evanfletcher42/shadertree.git ~/shadertree
 cd ~/shadertree
+
 ./install.sh
 ```
-The first run installs the build tools and downloads the nginx container, which takes a few minutes. To start from an existing database or backup instead of an empty one, use `./install.sh --import-db path/to/db.sqlite3`. It's only used if there's no database yet.
 
-Then:
-1. Edit `/var/www/shadertree/local.env` and set `SHADERTREE_ALLOWED_HOSTS` to the names and IPs people use to reach the site, comma-separated (for example `shadertree.example.com,10.0.0.5`). Other names get a 400 error. Then run `sudo systemctl restart gunicorn`.
-2. Create an admin login: `cd /var/www/shadertree && venv/bin/python manage.py createsuperuser`. The admin is at `/admin/`.
-3. Without the LED boards attached, set `SHADERTREE_NO_USB=1` in `local.env` and run `sudo systemctl restart shadertree-runner`.
+This sets a root password (you'll need one), clones this repository into your home directory, and runs an install script.
 
-### After a SteamOS update
+On the first run, this script:
+ - Disables read-only mode in the SteamOS filesystem (`sudo steamos-readonly disable`)
+ - Installs a compiler and headers needed to build the shader runner
+ - Sets up deployment (`/var/www/shadertree`) and backup (`~/shadertree-backups`) directories
+ - Sets up udev rules to talk to the LED board via USB
+ - Installs [gunicorn](https://gunicorn.org/)
+ - Installs [nginx](https://nginx.org/) in a rootless podman container
+ - Adds a firewall rule for http (port 80)
+ - Configures loginctl to allow containers to run at boot without user login
 
-Run `./install.sh` again. Updates remove the build tools, can reset what the script put in `/etc` (services, udev rule, firewall rule), and can replace the system Python. The script puts all of that back and rebuilds the venv if needed. Your database, settings and backups are kept.
+This can take a few minutes the first time. 
 
-### Deploying changes
+If you are installing on a new machine, but would like to start from an existing database or backup, run:
+```bash
+./install.sh --import-db path/to/db.sqlite3
+```
+Note this only does anything if there is not already a deployed database. For restoring a DB from a backup, see [Backups](#backups).
 
-`git pull`, then `./deploy.sh`. It builds `runshader`, syncs `stweb/` to `/var/www/shadertree/` (deleting files that are no longer in the repo), backs up the database, installs requirements, migrates, collects static files and restarts the site and the runner.
+### Configuration
 
-If the pull changed `install.sh` or anything in `deploy/`, run `./install.sh` instead. It deploys too.
+1. Edit `/var/www/shadertree/local.env` and set `SHADERTREE_ALLOWED_HOSTS` to the names and IPs people use to reach the site, comma-separated (for example `shadertree.example.com,10.0.0.5`).
+2. Then run: `sudo systemctl restart gunicorn`
+3. Create a django admin login: `cd /var/www/shadertree && venv/bin/python manage.py createsuperuser` - this is your login for the site at `shadertree.example.com/admin/`
 
-On a network that needs a proxy, set `https_proxy`/`http_proxy` before running either script. pacman, pip and podman use them. If your shell profile sets a proxy that the current network doesn't have, unset it for one run: `env -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY ./deploy.sh`.
+### After a SteamOS Update
 
-### Logs and status
+SteamOS updates tend to wipe build tools and configurations under `/etc` (services, udev rules, firewall rules, ...).
+
+If things seem broken after an OS update, just run `./install.sh` again. This will put back missing things, and will not touch your deployed db or backups. 
+
+### Scanning the Tree
+
+See the section [LED Reconstruction](#led-reconstruction) below. 
+
+
+## Development Setup
+
+### Ubuntu, Arch (Steam Deck)
+Run:
+```bash
+./setup-dev.sh
+```
+
+This will install C++ solver dependencies with apt or pacman & create a `.venv`.
+
+### Windows
+
+C++ development requires Visual Studio 2022 or newer & Python 3.12.
+
+Run:
+```powershell
+powershell -ExecutionPolicy Bypass -File setup-dev.ps1
+```
+and follow any instructions to install missing components. The script will then install dependencies and set up a Python `.venv`. 
+
+If you have not already set one, this will also set `VCPKG_ROOT` to Visual Studio's bundled vcpkg. 
+
+
+## Running the site locally
+
+From `stweb/`, activate the `.venv`, then:
+```
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver --insecure
+```
+The site will be at http://127.0.0.1:8000/. 
+
+### Building runshader
+
+Run `make` in the repository root. 
+
+## Deploying changes
+
+On the Steam Deck, in the cloned repository, run:
+
+```bash
+git pull
+./deploy.sh 
+```
+
+This will:
+1. Build the `runshader` binary
+2. Sync `stweb/` to `/var/www/shadertree` (deleting files no longer in the repo)
+3. Back up the db
+4. Install any new dependencies in the deployed `.venv`
+5. Migrates the db & collects any static files
+6. Restarts the site and the shader runner service. 
+
+NOTE: If your changes modify `install.sh` or anything under `deploy/`, run `./install.sh` instead. This will also deploy. 
+
+## Logs and status
 
 ```
 systemctl status gunicorn shadertree-runner shadertree-backup.timer
@@ -100,95 +151,139 @@ systemctl --user status shadertree-nginx
 journalctl -u shadertree-runner -f
 ```
 
-### Backups
+## Backups
 
-`~/shadertree-backups/` holds hourly copies of the database, plus one from every deploy. The newest 168 are kept (about 2 MB each). Copy them off the Deck now and then.
+Backups go in `~/shadertree-backups/` hourly and on every deploy. The most recent 168 copies (~7 days worth) are kept. 
 
-To restore one: `sudo systemctl stop gunicorn shadertree-runner`, copy the backup over `/var/www/shadertree/db.sqlite3`, delete `db.sqlite3-wal` and `db.sqlite3-shm` next to it, then start both services again.
+To restore from a backup:
 
-To seed a fresh database with the shader prefix, default editor text and LED coordinates, export them from the live one in `/var/www/shadertree`:
-```
-venv/bin/python manage.py dumpdata shader_app.shaderprefix shader_app.defaultshadereditortext shader_app.ledcoordscfg --indent 1 -o singletons.json
-```
-Load them after `migrate` with `venv/bin/python manage.py loaddata singletons.json`.
-
-## Development
-
-### Setup
-
-- **Windows:** `powershell -ExecutionPolicy Bypass -File setup-dev.ps1`. It checks for Visual Studio 2022 or newer with the C++ tools and vcpkg (listed in `reconstruct\.vsconfig`; if anything is missing it prints the install command). It sets `VCPKG_ROOT` to Visual Studio's bundled vcpkg unless you already have one, and creates `.venv` with Python 3.12.
-- **Ubuntu 24.04 and Arch:** `./setup-dev.sh`. It installs the solver's dependencies with apt or pacman and creates `.venv`.
-
-Both are safe to re-run. `.venv` has the site's requirements and the reconstruction tools' requirements. Activate it with `.venv\Scripts\activate` (Windows) or `source .venv/bin/activate` (Linux).
-
-### Running the site locally
-
-From `stweb/`, with `.venv` active:
-```
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver --insecure
-```
-The site is at http://127.0.0.1:8000/. `--insecure` serves the static files, which `runserver` otherwise skips because `DEBUG` is off. The editor preview works without the tree. Shaders only play if the runner is running.
-
-### Building runshader
-
-`make` in the repository root, on Linux with g++, the EGL/OpenGL headers (libglvnd) and libusb. It writes `shaderrunner/runshader` and copies it to `stweb/`. To try a shader without the LED boards, run it from a directory with a `ledcoords.dat` (the runner writes one): `./runshader --no-usb < shader.glsl`. The shader must include the prefix.
-
-### VS Code
-
-Open the repository root and install the recommended extensions (CMake Tools, C/C++, Python). Pick the `windows` or `linux` configure preset and a build preset (`windows-relwithdebinfo` for debugging). Ctrl+Shift+B lists build tasks for each configuration. The `ledreconstruct` launch configurations build the selected preset, then solve from a directory of cached observation JSONs. Python completion for `stweb/` uses `.venv`. On Windows, restart VS Code after the first `setup-dev.ps1` run so it sees `VCPKG_ROOT`.
+1. `sudo systemctl stop gunicorn shadertree-runner`
+2. copy the backup over `/var/www/shadertree/db.sqlite3`
+3. delete `db.sqlite3-wal` and `db.sqlite3-shm` 
+4. `sudo systemctl start gunicorn shadertree-runner` 
 
 ## LED reconstruction
 
 ### Building the solver
 
-`reconstruct/` builds `ledreconstruct` with CMake (3.22+) and a C++17 compiler. Dependencies: Ceres 2.2+, Eigen 3.4+, OpenCV 4.6+ (5.x works; FFmpeg is needed for video decode), jsoncpp and cxxopts 3.1+. Run the setup script for your platform first (see [Setup](#setup)).
+`ledreconstruct` (under `/reconstruct/`) builds with CMake (3.22+) and a C++17 compiler.
 
-**Windows**, from a Developer PowerShell:
-```
+Run the setup script for your platform first (see [Setup](#setup)).
+
+Dependencies (should be taken care of automatically):
+
+ - Ceres 2.2+
+ - Eigen 3.4+
+ - OpenCV 4.6+ 
+ - FFmpeg ( for video decode with OpenCV 5+)
+ - jsoncpp 
+ - cxxopts 3.1+
+
+### Windows
+
+Powershell:
+```powershell
 cd reconstruct
 cmake --preset windows
 cmake --build --preset windows-release
 ```
-vcpkg builds the dependencies from `vcpkg.json` on the first configure (slow; cached afterwards). The executable and its DLLs end up in `build\windows\Release\`. You can also open `reconstruct\` as a folder in Visual Studio. For a faster debuggable build use `cmake --build --preset windows-relwithdebinfo`. Debug works, but the solve is very slow.
+
+`vcpkg` will pull and build dependencies from `vcpkg.json` when cmake is configured (`--preset windows`). This will be slow - ceres & opencv are big - but should be cached after the first run. 
+
+Executables will end up in `build\windows\Release`. 
+
+If you prefer, you can also open `reconstruct\` as a folder in Visual Studio, or the repo as a whole in Visual Studio Code. 
+
+For a faster debuggable build, the "release with debug symbols" target is recommended:
+```powershell
+cmake --build --preset windows-relwithdebinfo
+```
+The ordinary Debug target will work, but the solver will be painfully slow.
 
 **Ubuntu 24.04 and Arch:**
-```
+```bash
 cd reconstruct
 cmake --preset linux
 cmake --build --preset linux -j
 ```
-The executable is `build/linux/ledreconstruct`.
+Executable will end up under `build/linux/`.
 
-**SteamOS:** build inside an Arch container. Run `distrobox create --name arch --image archlinux:latest`, then `distrobox enter arch` and follow the Arch steps.
+### SteamOS
 
-**Other platforms:** use vcpkg for the dependencies: `cmake --preset linux -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake`.
+Build inside an Arch container. Run:
+```bash
+distrobox create --name arch --image archlinux:latest
+distrobox enter arch
+```
+
+and follow the Arch steps above.
+
+### Other Platforms
+
+Use vcpkg for dependencies:
+```
+cmake --preset linux -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+```
+Beyond that, you're on your own. 
 
 ### Calibrating the camera
 
-The solver needs a calibration for the capture camera (`--calibration`). Make one with the tools in `reconstruct/tools`, with `.venv` active:
+The solver needs a calibration for the capture camera (`--calibration`). Tools are provided under `/reconstruct/tools` to make one:
 
-1. `python reconstruct/tools/make_charuco_target.py charuco.png`, and show the image full screen on a monitor.
-2. Film it with the capture camera, at the zoom and resolution you'll use for the tree. Cover many angles and distances, including the corners of the frame.
+1. `python reconstruct/tools/make_charuco_target.py charuco.png`. Show this image full-screen on a monitor, or print it out.
+2. Film the target (video) with the capture camera, at the zoom and resolution you'll use for capturing the tree. Cover many angles and distances. Make sure the target completely fills the image frame. 
 3. `python reconstruct/tools/calibrate_charuco_from_video.py <videos> --output calib.json`
 
-Keep `calib.json` with your captures, outside the repository.
+Keep `calib.json` with your captures.
 
-### Capturing and solving
+### Capturing and Solving
 
-1. On the Deck: `sudo systemctl stop shadertree-runner`, then from the repository root run `(cd /var/www/shadertree && ./runshader) < shaderrunner/ledcodes.glsl`. Every LED blinks its address.
-2. Film the tree from all around with the calibrated camera at 59.94 fps. 2025 used 156 clips.
-3. On a PC: `ledreconstruct --videos <video dir> --dump-observations <video dir>/obs --calibration calib.json --output points.json --site site`. Reruns reuse the decoded observations in `obs/`.
-4. In the admin, back up the `LedCoordsCfg` content, then paste in `site.ledcoords.json`.
-5. Stop `runshader` with Ctrl+C, then `sudo systemctl start shadertree-runner`.
+On the Steam Deck:
+```bash
+sudo systemctl stop shadertree-runner
+```
+
+Then, from the repository root (`~/shadertree`), run:
+```bash
+(cd /var/www/shadertree && ./runshader) < shaderrunner/ledcodes.glsl
+```
+
+This shader blinks out a series of (8,4,4)_2 Hadamard codes & sync signals for a 60 FPS camera capture. You may need to edit `ledcodes.glsl` for cameras with different timing. 
+
+Film this using a stationary camera (e.g. on a tripod), from many different perspectives. The specific captures needed will depend on your camera and your tree. The goal is to capture at least 2 or 3 clear views of every LED from different perspectives. For reference, the 2025 tree used ~150 perspectives, but this was probably excessive. 
+
+Set your camera exposure **low**. The image should be mostly dark, except for the LEDs. 
+
+Once captured, stop `runshader` with CTRL+C, copy all your videos to your PC, then run:
+```bash
+./ledreconstruct --videos <video_dir> --dump-observations <video_dir>/obs --calibration calib.json --output points.json --site <site_name>
+```
+
+Once solved, log into the django admin on the site (at `/admin/`), then paste the contents of `<site_name>.ledcoords.json` into the `LedCoordsConfig` entry. 
+
+When finished, run:
+```
+sudo systemctl start shadertree-runner
+```
+
+Your reconstructed tree should appear on the site in preview windows & be used for shaders. 
 
 ## Credits
 
-**TODO: authors and contributors.**
+Shadertree is a project by Evan Fletcher and Charles Lohr. 
 
-**TODO: third-party code, e.g. the USB driver (`shaderrunner/os_generic.h` carries its own license), and anything else to credit.**
+Evan bought the first string of LEDs for this project back in ~2017. At first, these were used as "normal" animated RGB holiday lights. 
+
+The first version of the 3D reconstruction solver was written in 2022, with a 500-LED tree driven by fixed firmware on an Arduino. Reconstructed points were in a header file & effects were animated with FastLED. Code for that version of the tree is still available here: https://github.com/evanfletcher42/3dBlinkenlights 
+
+This fixed-function tree was used at the Valve office on 12F / 13F in 2022 and 2023. 
+
+"Shadertree," as in the website editor and collaborative art project, first came online at the Valve office for holiday 2024, again using the 500-LED tree. The first shader written for it was, appropriately, the [Source Engine "Missing Texture" shader](https://developer.valvesoftware.com/wiki/Missing_content). 
+
+Charles joined the project for holiday 2025, contributing [power electronics & LED drivers](https://github.com/cnlohr/x32-ws2812-usbhs-breakout) for a much larger tree, set up in the cafeteria on 15F. 
+
+This project was open sourced in November 2026, with a bunch of QoL upgrades & some slight hardware tweaks for the tree. Mostly, we waited until the building where the office is started putting up holiday decorations. We figured doing this earlier would've been tacky. 
 
 ## License
 
-**TODO: license.**
+TODO

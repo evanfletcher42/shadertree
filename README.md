@@ -1,6 +1,6 @@
 # shadertree
 
-**TODO: photo or GIF of the editor preview and the tree side by side**
+<img width="1280" height="640" alt="shadertree" src="https://github.com/user-attachments/assets/828fefa0-d9ee-4836-b6c3-7497550b7adf" />
 
 Shadertree is a collaborative-art holiday tree made out of thousands of 3D-scanned addressible LEDs. From a web browser, you can write and preview GLSL vertex shaders that write color attributes, which render out to the LEDs live! 
 

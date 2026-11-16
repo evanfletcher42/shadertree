@@ -7,8 +7,10 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.dateformat import time_format
 from .utils import get_client_ip
-from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, PlaybackControl
+from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, PlaybackControl, PlayNowRequest, BannedIP
+from datetime import timedelta
 import json
+import math
 
 def eta_text(eta):
     return time_format(timezone.localtime(eta), "g:i:s A") if eta else ""
@@ -235,12 +237,44 @@ def api_playlist(request):
         "upcoming": [dict(shader_info(s), eta=eta_text(eta)) for s, eta in PlaybackControl.get().upcoming()]
     })
 
+def play_now_wait(ctrl, ip):
+    """Returns seconds until this IP address may use Play Now again. 0 or less means it may now."""
+    # no limits for the server machine itself, which runs the kiosk
+    if ip in ("127.0.0.1", "::1"):
+        return 0
+    now = timezone.now()
+    accepted = PlayNowRequest.objects.filter(ip_addr=ip, accepted=True).order_by("-created_at").values_list("created_at", flat=True)
+    ends = [now]
+    last = accepted.first()
+    if last:
+        ends.append(last + timedelta(seconds=ctrl.play_now_cooldown))
+    if ctrl.play_now_cap:
+        window = timedelta(minutes=ctrl.play_now_cap_minutes)
+        recent = list(accepted.filter(created_at__gt=now - window)[:ctrl.play_now_cap])
+        if len(recent) == ctrl.play_now_cap:
+            ends.append(recent[-1] + window)
+    return (max(ends) - now).total_seconds()
+
+def auto_ban(ctrl, ip):
+    if not ctrl.auto_ban_rejections or ip is None:
+        return
+    since = timezone.now() - timedelta(hours=ctrl.auto_ban_hours)
+    if PlayNowRequest.objects.filter(ip_addr=ip, accepted=False, created_at__gt=since).count() > ctrl.auto_ban_rejections:
+        BannedIP.objects.get_or_create(ip_address=ip, defaults={"reason": "Auto-ban: Play Now spam"})
+
 @require_POST
 def play_now(request, ident: str):
     shader = get_object_or_404(Shader, ident=ident, is_deleted=False, is_playable=True)
+    ip = get_client_ip(request)
+    ctrl = PlaybackControl.get()
+
+    wait = play_now_wait(ctrl, ip)
+    PlayNowRequest.objects.create(ip_addr=ip, shader=shader, accepted=wait <= 0)
+    if wait > 0:
+        auto_ban(ctrl, ip)
+        return JsonResponse({"error": "Too many Play Now requests.", "retry_after": math.ceil(wait)}, status=429)
 
     # Only set the request here. The runner owns the playlist fields.
-    PlaybackControl.get()
     PlaybackControl.objects.filter(pk=1).update(force_shader_id=shader.id)
 
-    return JsonResponse({"ok": True, "ident": shader.ident, "title": shader.title})
+    return JsonResponse({"ok": True, "ident": shader.ident, "title": shader.title, "retry_after": math.ceil(play_now_wait(ctrl, ip))})

@@ -1,8 +1,10 @@
 from django.contrib import admin, messages
+from django.db.models import Count, Exists, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import path, reverse
 from django.utils.html import format_html
-from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, BannedIP
+from .models import Shader, ShaderVersion, ShaderPrefix, DefaultShaderEditorText, LedCoordsCfg, BannedIP, PlaybackControl, PlayNowRequest
 from .utils import get_client_ip
 
 
@@ -94,9 +96,58 @@ class ShaderAdmin(admin.ModelAdmin):
         return redirect('admin:shader_app_shader_change', shader_id)
 
 
+class PlaybackControlAdmin(admin.ModelAdmin):
+    # the playlist fields are only written by the runner process
+    fields = ('play_now_cooldown', 'play_now_cap', 'play_now_cap_minutes', 'auto_ban_rejections', 'auto_ban_hours')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class PlayNowRequestAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'ip_link', 'shader', 'accepted', 'ip_rejected', 'ip_banned')
+    list_filter = ('accepted', 'created_at')
+    search_fields = ('ip_addr',)
+    ordering = ['-created_at']
+    actions = ['ban_ips']
+
+    def get_queryset(self, request):
+        rejected = PlayNowRequest.objects.filter(ip_addr=OuterRef('ip_addr'), accepted=False).values('ip_addr').annotate(n=Count('id')).values('n')
+        return super().get_queryset(request).annotate(
+            ip_rejected=Coalesce(Subquery(rejected), 0),
+            ip_banned=Exists(BannedIP.objects.filter(ip_address=OuterRef('ip_addr'))),
+        )
+
+    @admin.display(description="IP address", ordering='ip_addr')
+    def ip_link(self, obj):
+        if obj.ip_addr is None:
+            return "-"
+        return format_html('<a href="?ip_addr={}">{}</a>', obj.ip_addr, obj.ip_addr)
+
+    @admin.display(description="Rejected from this IP", ordering='ip_rejected')
+    def ip_rejected(self, obj):
+        return obj.ip_rejected
+
+    @admin.display(description="IP banned", boolean=True, ordering='ip_banned')
+    def ip_banned(self, obj):
+        return obj.ip_banned
+
+    @admin.action(description="Ban IP addresses of selected requests")
+    def ban_ips(self, request, queryset):
+        ips = set(queryset.exclude(ip_addr=None).values_list('ip_addr', flat=True))
+        for ip in ips:
+            BannedIP.objects.get_or_create(ip_address=ip, defaults={'reason': "Play Now spam"})
+        self.message_user(request, f"Banned {len(ips)} IP address(es).", level=messages.SUCCESS)
+
+
 admin.site.register(Shader, ShaderAdmin)
 admin.site.register(ShaderVersion, ShaderVersionAdmin)
 admin.site.register(ShaderPrefix)
 admin.site.register(DefaultShaderEditorText)
 admin.site.register(LedCoordsCfg)
 admin.site.register(BannedIP)
+admin.site.register(PlaybackControl, PlaybackControlAdmin)
+admin.site.register(PlayNowRequest, PlayNowRequestAdmin)

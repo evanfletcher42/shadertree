@@ -33,6 +33,20 @@ function pollPlaylist(onUpdate) {
     setInterval(tick, PLAYLIST_POLL_MS);
 }
 
+let playNowBlockedUntil = 0;
+
+function setPlayNowState(button) {
+    const wait = Math.ceil((playNowBlockedUntil - Date.now()) / 1000);
+    button.disabled = wait > 0;
+    button.textContent = wait > 0 ? `Wait ${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}` : 'Play Now';
+}
+
+function updatePlayNowButtons() {
+    document.querySelectorAll('.playNowButton, #playNowBtn').forEach(setPlayNowState);
+    if (Date.now() < playNowBlockedUntil)
+        setTimeout(updatePlayNowButtons, 1000);
+}
+
 // Ask the tree to play this shader next
 async function playNow(ident) {
     try {
@@ -41,7 +55,9 @@ async function playNow(ident) {
             credentials: 'same-origin',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
         });
-        if (!response.ok) throw new Error(`Response status: (${response.status}) ${await response.text()}`);
+        if (!response.ok && response.status !== 429) throw new Error(`Response status: (${response.status}) ${await response.text()}`);
+        playNowBlockedUntil = Date.now() + (await response.json()).retry_after * 1000;
+        updatePlayNowButtons();
     } catch (error) {
         console.error('Play-now failed:', error);
     }
@@ -50,7 +66,7 @@ async function playNow(ident) {
 function makePlayNowButton(ident) {
     const button = document.createElement('button');
     button.className = 'playNowButton';
-    button.textContent = 'Play Now';
+    setPlayNowState(button);
     button.addEventListener('click', () => playNow(ident));
     return button;
 }

@@ -135,6 +135,12 @@ class BannedIP(models.Model):
     def __str__(self):
         return self.ip_address
 
+class PlayNowRequest(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    ip_addr = models.GenericIPAddressField(null=True, blank=True)
+    shader = models.ForeignKey(Shader, null=True, on_delete=models.SET_NULL)
+    accepted = models.BooleanField()  # false if rejected by the cooldown
+
 class PlaybackControl(models.Model):
     # Singleton (always pk=1)
     force_shader = models.ForeignKey(
@@ -148,6 +154,15 @@ class PlaybackControl(models.Model):
     next_cycle = models.JSONField(default=list)  # every playable shader id, in next cycle's order
     current = models.BigIntegerField(null=True, blank=True)  # shader id the runner is on
     started_at = models.DateTimeField(null=True, blank=True)  # start of the current shader; null when the runner is stopped
+
+    play_now_cooldown = models.PositiveIntegerField(default=60, help_text="Seconds an IP address must wait between Play Now requests.")
+    play_now_cap = models.PositiveIntegerField(default=10, help_text="Accepted Play Now requests allowed per IP address in the cap window. 0 turns the cap off.")
+    play_now_cap_minutes = models.PositiveIntegerField(default=60, help_text="Length of the cap window, in minutes.")
+    auto_ban_rejections = models.PositiveIntegerField(default=20, help_text="Ban an IP address with more than this many rejected Play Now requests in the ban window. 0 turns auto-ban off.")
+    auto_ban_hours = models.PositiveIntegerField(default=24, help_text="Length of the ban window, in hours.")
+
+    def __str__(self):
+        return "Playback Control"
 
     @staticmethod
     def get():

@@ -195,6 +195,12 @@ button.playNowButton
     cursor: pointer;
 }
 
+button.playNowButton:disabled
+{
+    background-color: #808080;
+    cursor: default;
+}
+
 #player
 {
     display: flex;

@@ -302,7 +302,7 @@ Shadertree is built with these projects, not included in this repository:
 
 - Website: [Django](https://www.djangoproject.com/), [gunicorn](https://gunicorn.org/), [nginx](https://nginx.org/)
 - Shader runner: [libusb](https://libusb.info/), [EGL](https://www.khronos.org/egl) / [OpenGL ES](https://www.khronos.org/opengles/)
-- LED reconstruction: [Ceres Solver](http://ceres-solver.org/), [OpenCV](https://opencv.org/), [Eigen](https://eigen.tuxfamily.org/), [jsoncpp](https://github.com/open-source-parsers/jsoncpp), [cxxopts](https://github.com/jarro2783/cxxopts)
+- LED reconstruction: [Ceres Solver](https://github.com/ceres-solver/ceres-solver), [OpenCV](https://opencv.org/), [Eigen](https://eigen.tuxfamily.org/), [jsoncpp](https://github.com/open-source-parsers/jsoncpp), [cxxopts](https://github.com/jarro2783/cxxopts)
 - Camera calibration tools: [OpenCV](https://opencv.org/) (Python)
 
 Please refer to these projects for their license terms. 

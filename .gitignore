@@ -37,7 +37,7 @@ x64/
 reconstruct/build/
 CMakeUserPresets.json
 
-# Editors (shared VS Code config is tracked)
+# Editors
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json

@@ -281,7 +281,7 @@ The first version of the 3D reconstruction solver was written in 2022, with a 50
 
 This fixed-function tree was used at the Valve office on 12F / 13F in 2022 and 2023. 
 
-"Shadertree," as in the website editor and collaborative art project, first came online at the Valve office for holiday 2024, again using the 500-LED tree. The first shader written for it was, appropriately, the [Source Engine "Missing Texture" shader](https://developer.valvesoftware.com/wiki/Missing_content). 
+"Shadertree," as in the website editor and collaborative art project, first came online at the Valve office for holiday 2024, again using the 500-LED tree. One of the first shaders written for it was, appropriately, the [Source Engine "Missing Texture" shader](https://developer.valvesoftware.com/wiki/Missing_content). 
 
 Charles joined the project for holiday 2025, contributing [power electronics & LED drivers](https://github.com/cnlohr/x32-ws2812-usbhs-breakout) for a much larger tree, set up in the cafeteria on 15F. 
 

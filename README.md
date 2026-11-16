@@ -284,6 +284,25 @@ Charles joined the project for holiday 2025, contributing [power electronics & L
 
 This project was open sourced in November 2026, with a bunch of QoL upgrades & some slight hardware tweaks for the tree. Mostly, we waited until the building where the office is started putting up holiday decorations. We figured doing this earlier would've been tacky. 
 
+### Third-party code
+
+These files are included in this repository under their own licenses, not the project license:
+
+- [Ace](https://ace.c9.io/) 1.4.12 (`ace.js`, `mode-glsl.js`, `theme-chrome.js`). Copyright (c) 2010, Ajax.org B.V. BSD 3-Clause.
+- [gl-matrix](https://glmatrix.net/) 2.7.0. Copyright (c) 2015-2018, Brandon Jones, Colin MacKenzie IV. MIT.
+- [Lobster](https://fonts.google.com/specimen/Lobster) font 1.4. Copyright (c) 2010, Pablo Impallari. SIL Open Font License 1.1.
+
+### Dependencies
+
+Shadertree is built with these projects, not included in this repository: 
+
+- Website: [Django](https://www.djangoproject.com/), [gunicorn](https://gunicorn.org/), [nginx](https://nginx.org/)
+- Shader runner: [libusb](https://libusb.info/), [EGL](https://www.khronos.org/egl) / [OpenGL ES](https://www.khronos.org/opengles/)
+- LED reconstruction: [Ceres Solver](http://ceres-solver.org/), [OpenCV](https://opencv.org/), [Eigen](https://eigen.tuxfamily.org/), [jsoncpp](https://github.com/open-source-parsers/jsoncpp), [cxxopts](https://github.com/jarro2783/cxxopts)
+- Camera calibration tools: [OpenCV](https://opencv.org/) (Python)
+
+Please refer to these projects for their own license terms. 
+
 ## License
 
 TODO
